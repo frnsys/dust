@@ -22,6 +22,10 @@ impl Chord {
         notes.sort_by_key(|n| n.semitones);
         notes
     }
+
+    pub fn describe_notes(&self) -> Vec<String> {
+        self.notes().iter().map(|n| n.to_string()).collect()
+    }
 }
 
 

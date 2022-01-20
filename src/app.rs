@@ -11,7 +11,7 @@ use anyhow::Result;
 use crate::key::{Key, Mode};
 use crate::note::Note;
 use crate::audio::Audio;
-use crate::progression::{ChordSpec, Quality};
+use crate::progression::ChordSpec;
 
 enum InputMode {
     Normal,
@@ -50,8 +50,8 @@ impl<'a> App<'a> {
             root: self.root,
             mode: self.mode,
         };
-        let start_chord = ChordSpec::new(1, Quality::Major);
-        self.progression = start_chord.gen_progression(self.bars);
+        let start_chord: ChordSpec = ChordSpec::rand_chord_for_mode(&key.mode);
+        self.progression = start_chord.gen_progression(self.bars, &key.mode);
         let progression_in_key = self.progression.iter().map(|cs| cs.chord_for_key(&key)).collect();
         self.audio.play_progression(self.tempo as f64, &progression_in_key)?;
         Ok(())

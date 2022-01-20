@@ -2,7 +2,7 @@
 
 use regex::Regex;
 use crate::chord::Chord;
-use crate::key::{Key, Mode};
+use crate::key::{Key, Mode, MAJOR, MINOR};
 use rand::seq::SliceRandom;
 use std::{fmt, str::FromStr};
 use thiserror::Error;
@@ -33,6 +33,24 @@ fn numeral_to_mode(numeral: &str) -> Result<Mode, ChordParseError>{
     }
 }
 
+fn degree_to_interval(degree: usize, quality: &Quality) -> usize {
+    // From 1-indexed to 0-indexed
+    let degree = degree as usize - 1;
+    match quality {
+        Quality::Major => {
+            MAJOR[degree]
+        }
+        Quality::Augmented => {
+            MAJOR[degree] - 1
+        }
+        Quality::Minor => {
+            MINOR[degree]
+        }
+        Quality::Diminished => {
+            MINOR[degree] - 1
+        }
+    }
+}
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub enum Quality {
@@ -62,6 +80,20 @@ impl ChordSpec {
         }
     }
 
+    pub fn rand_chord_for_mode(mode: &Mode) -> ChordSpec {
+        let mut rng = rand::thread_rng();
+        let cands = match mode {
+            Mode::Major => {
+                vec!["I", "ii", "iii", "IV", "V", "vi", "vii-"]
+            }
+            Mode::Minor => {
+                vec!["i", "ii-", "III", "iv", "V", "VI", "vii-", "VII"]
+            }
+        };
+        // TODO clean this up
+        (*cands.choose(&mut rng).unwrap()).try_into().unwrap()
+    }
+
     /// Add a note by scale degree
     pub fn add(mut self, degree: usize) -> ChordSpec {
         self.extras.push(degree as isize);
@@ -86,71 +118,96 @@ impl ChordSpec {
         self
     }
 
+    pub fn intervals(&self) -> Vec<isize> {
+        let mut intervals = match self.quality {
+            Quality::Major => {
+                vec![0, 4, 7]
+            }
+            Quality::Minor => {
+                vec![0, 3, 7]
+            }
+            Quality::Diminished => {
+                vec![0, 3, 6]
+            }
+            Quality::Augmented => {
+                vec![0, 4, 8]
+            }
+        };
+
+        for degree in &self.extras {
+            // GTE zero means we add the interval
+            let interval = degree_to_interval(degree.abs() as usize, &self.quality) as isize;
+            if *degree >= 0 {
+                intervals.push(interval);
+
+            // LT zero means we remove the interval
+            } else {
+                intervals.retain(|s| *s != interval);
+            }
+        }
+
+        if self.bass_degree != self.degree {
+            let bass_interval = degree_to_interval(self.bass_degree, &self.quality) as isize;
+            intervals.iter().map(|intv| if *intv < bass_interval {
+                intv + 12
+            } else {
+                *intv
+            }).collect()
+        } else {
+            intervals
+        }
+    }
+
     /// Resolve the chord spec into actual semitones
     /// for the given key.
     pub fn chord_for_key(&self, key: &Key) -> Chord {
         let root = key.note(self.degree);
-        let mut intervals = match self.quality {
-            Quality::Major => {
-                vec![0, 4, 7]
-            },
-            Quality::Minor => {
-                vec![0, 3, 7]
-            },
-            Quality::Diminished => {
-                vec![0, 3, 6]
-            },
-            Quality::Augmented => {
-                vec![0, 4, 8]
-            },
-        };
-        for degree in &self.extras {
-            // GTE zero means we add the degree
-            if *degree >= 0 {
-                let interval = key.interval(*degree as usize);
-                intervals.push(interval.semitones);
-
-            // LT zero means we remove the degree
-            } else {
-                let degree = degree.abs();
-                intervals.retain(|s| *s != degree);
-            }
-        }
-        let bass_interval = key.interval(self.bass_degree).semitones;
-        let intervals = intervals.iter().map(|intv| if *intv < bass_interval {
-            intv + 12
-        } else {
-            *intv
-        }).collect();
-        Chord::new(root, intervals)
+        Chord::new(root, self.intervals())
     }
 
     /// Chord progressions
     /// Return a list of candidate chord specs
     /// to follow this one.
-    pub fn next(&self) -> Vec<ChordSpec> {
+    pub fn next(&self, mode: &Mode) -> Vec<ChordSpec> {
         let chord_name = self.to_string();
-        let cands = match chord_name.as_ref() {
-            // Major
-            "I" => vec!["I", "ii", "iii", "vi", "IV", "V"],
-            "ii" => vec!["V", "IV", "iii"],
-            "iii" => vec!["vi", "I", "IV", "ii"],
-            "IV" => vec!["I", "V", "vi", "iii", "ii"],
-            "V" => vec!["I", "IV", "vi"],
-            "vi" => vec!["IV", "V", "I", "ii"],
-            // "vii-/ii"
-            _ => vec![]
+        let cands = match mode {
+            Mode::Major => {
+                match chord_name.as_ref() {
+                    "I" => vec!["I", "ii", "iii", "IV", "V", "vi", "vii-"],
+                    "ii" => vec!["V", "vii-"],
+                    "iii" => vec!["IV", "vi"],
+                    "IV" => vec!["ii", "V", "vii-"],
+                    "V" => vec!["I", "vii-"],
+                    "vi" => vec!["ii", "IV"],
+                    "vii-" => vec!["I", "V", "vi"],
+                    _ => vec![]
+                }
+            }
+            Mode::Minor => {
+                match chord_name.as_ref() {
+                    // Minor
+                    "i" => vec!["i", "ii-", "III", "iv", "V", "VI", "vii-", "VII"],
+                    "ii-" => vec!["V", "vii-"],
+                    "III" => vec!["iv", "VI"],
+                    "iv" => vec!["ii-", "V", "vii-"],
+                    "V" => vec!["i", "vii-"],
+                    "VI" => vec!["iv", "ii-"],
+                    "vii-" => vec!["i", "V", "VI"],
+                    "VII" => vec!["III"],
+                    _ => vec![]
+                }
+            }
         };
         cands.into_iter().map(|c| c.try_into().unwrap()).collect()
     }
 
     /// Generate a progression of chord specs from this chord spec.
-    pub fn gen_progression(&self, bars: usize) -> Vec<ChordSpec> {
+    pub fn gen_progression(&self, bars: usize, mode: &Mode) -> Vec<ChordSpec> {
         let mut rng = rand::thread_rng();
         let mut progression = vec![self.clone()];
         let mut last = self.clone();
         for _ in 0..bars-1 {
-            let cands = last.next();
+            let cands = last.next(mode);
             let next = cands.choose(&mut rng);
             if next.is_none() {
                 break;
@@ -322,6 +379,32 @@ mod test {
     }
 
     #[test]
+    fn test_chord_intervals() {
+        // Reference: <https://en.wikipedia.org/wiki/List_of_chords>
+        let examples = vec![
+            ("I",  vec![0, 4, 7]),
+            ("I+", vec![0, 4, 8]),
+            ("i",  vec![0, 3, 7]),
+            ("i-", vec![0, 3, 6]),
+            ("I7", vec![0, 4, 7, 11]),
+            ("I+7", vec![0, 4, 8, 10]),
+            ("i7", vec![0, 3, 7, 10]),
+            ("i-7", vec![0, 3, 6, 9]),
+        ];
+        for (name, expected) in examples {
+            println!("Name: {:?}", name);
+            let chord: ChordSpec = name.try_into().unwrap();
+            let intervals = chord.intervals();
+            println!(" Intervals: {:?}", intervals);
+            println!(" Expected: {:?}", expected);
+            assert_eq!(intervals.len(), expected.len());
+            for (a, b) in intervals.iter().zip(expected) {
+                assert_eq!(*a, b);
+            }
+        }
+    }
+
+    #[test]
     fn test_chord_for_keys() {
         let key = Key {
             root: "C3".try_into().unwrap(),
@@ -372,8 +455,9 @@ mod test {
     #[test]
     fn test_chord_progression() {
         let bars = 4;
+        let mode = Mode::Major;
         let spec = ChordSpec::new(1, Quality::Major);
-        let progression = spec.gen_progression(bars);
+        let progression = spec.gen_progression(bars, &mode);
         assert_eq!(progression.len(), bars);
     }
 
@@ -419,5 +503,4 @@ mod test {
         let expected = ChordSpec::new(5, Quality::Augmented).add(7).add(9).key_of(2, Mode::Minor).bass(5);
         assert_eq!(spec, expected);
     }
-
 }

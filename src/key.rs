@@ -2,8 +2,8 @@ use std::fmt;
 use crate::note::Note;
 use crate::interval::Interval;
 
-const MAJOR: [usize; 8] = [0, 2, 4, 5, 7, 9, 11, 12];
-const MINOR: [usize; 8] = [0, 1, 3, 5, 7, 8, 10, 12];
+pub const MAJOR: [usize; 8] = [0, 2, 4, 5, 7, 9, 11, 12];
+pub const MINOR: [usize; 8] = [0, 1, 3, 5, 7, 8, 10, 12];
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub enum Mode {
@@ -38,12 +38,12 @@ impl Key {
         match self.mode {
             Mode::Major => {
                 Interval {
-                    semitones: MAJOR[degree % 8] as isize
+                    semitones: MAJOR[degree % 7] as isize
                 }
             },
             Mode::Minor => {
                 Interval {
-                    semitones: MINOR[degree % 8] as isize
+                    semitones: MINOR[degree % 7] as isize
                 }
             },
         }
