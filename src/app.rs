@@ -50,7 +50,7 @@ impl<'a> App<'a> {
             root: self.root,
             mode: self.mode,
         };
-        let start_chord = ChordSpec::new(0, Quality::Major);
+        let start_chord = ChordSpec::new(1, Quality::Major);
         self.progression = start_chord.gen_progression(self.bars);
         let progression_in_key = self.progression.iter().map(|cs| cs.chord_for_key(&key)).collect();
         self.audio.play_progression(self.tempo as f64, &progression_in_key)?;
@@ -68,7 +68,7 @@ impl<'a> Default for App<'a> {
             input_target: InputTarget::Tempo,
             message: "",
 
-            tempo: 120,
+            tempo: 100,
             bars: 8,
             mode: Mode::Major,
             root: Note {

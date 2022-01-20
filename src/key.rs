@@ -21,7 +21,7 @@ impl fmt::Display for Mode {
     }
 }
 
-
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub struct Key {
     pub root: Note,
     pub mode: Mode,
@@ -30,16 +30,20 @@ pub struct Key {
 impl Key {
     /// Compute the interval from the key's root to the
     /// specified scale degree.
+    /// Note that by convention scale degrees are 1-indexed;
+    /// i.e. degree 1 is the root note of the key,
+    /// so we have to subtract 1 to make them 0-indexed.
     pub fn interval(&self, degree: usize) -> Interval {
+        let degree = degree - 1;
         match self.mode {
             Mode::Major => {
                 Interval {
-                    semitones: MAJOR[degree] as isize
+                    semitones: MAJOR[degree % 8] as isize
                 }
             },
             Mode::Minor => {
                 Interval {
-                    semitones: MINOR[degree] as isize
+                    semitones: MINOR[degree % 8] as isize
                 }
             },
         }

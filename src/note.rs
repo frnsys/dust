@@ -1,6 +1,6 @@
-use crate::interval::Interval;
+use regex::Regex;
 use thiserror::Error;
-use itertools::Itertools;
+use crate::interval::Interval;
 use std::{fmt, str::FromStr};
 use std::ops::{Add, Sub};
 
@@ -17,6 +17,9 @@ pub enum NoteParseError {
     #[error("Invalid note name `{0}`")]
     InvalidName(String),
 
+    #[error("Invalid octave `{0}`")]
+    InvalidOctave(String),
+
     #[error("Couldn't parse octave")]
     ParseIntError(#[from] std::num::ParseIntError),
 }
@@ -25,10 +28,14 @@ pub enum NoteParseError {
 impl FromStr for Note {
     type Err = NoteParseError;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let mut chars = s.chars();
-        let name = chars.take_while_ref(|c| c.is_alphabetic())
-            .collect::<String>();
-        let octave = chars.collect::<String>();
+        let re = Regex::new(r"^([A-G][b#]?)(\d)$").unwrap();
+        let caps = re.captures(s).ok_or(NoteParseError::InvalidName(s.to_string()))?;
+        let name = caps.get(1)
+            .ok_or(NoteParseError::InvalidName("(none)".to_string()))?
+            .as_str();
+        let octave = caps.get(2)
+            .ok_or(NoteParseError::InvalidOctave("(none)".to_string()))?
+            .as_str();
 
         if let Some(offset) = NAMES.iter().position(|&n| n == name) {
             let offset = offset as isize;

@@ -18,7 +18,9 @@ impl Chord {
 
     /// Return the notes that make up this chord.
     pub fn notes(&self) -> Vec<Note> {
-        self.intervals.iter().map(|intv| self.root + *intv).collect()
+        let mut notes: Vec<Note> = self.intervals.iter().map(|intv| self.root + *intv).collect();
+        notes.sort_by_key(|n| n.semitones);
+        notes
     }
 }
 
