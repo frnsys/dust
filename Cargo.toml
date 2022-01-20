@@ -8,8 +8,8 @@ edition = "2021"
 [dependencies]
 kira = "0.5.3"
 rand = "0.8.4"
-ctrlc = "3.2.1"
 anyhow = "1.0.52"
 thiserror = "1.0.30"
 itertools = "0.10.3"
-clap = { version = "3.0.9", features = ["derive"] }
+tui = { version = "0.16", default-features = false, features = ['crossterm'] }
+crossterm = { version = "0.19" }
