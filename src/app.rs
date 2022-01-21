@@ -60,8 +60,7 @@ pub struct App<'a> {
     /// Params
     tempo: usize,
     bars: usize,
-    mode: Mode,
-    root: Note,
+    key: Key,
 
     // Current chord in the progression
     chord_idx: usize,
@@ -91,10 +90,12 @@ impl<'a> App<'a> {
 
             bars: 8,
             tempo: 100,
-            mode: Mode::Major,
-            root: Note {
-                semitones: 27
-            }, // C3
+            key: Key {
+                mode: Mode::Major,
+                root: Note {
+                    semitones: 27
+                }, // C3
+            },
             progression: vec![],
             progression_in_key: vec![],
             template,
@@ -103,17 +104,11 @@ impl<'a> App<'a> {
         app
     }
 
-    fn gen_progression(&mut self) -> Result<()> {
+    /// Updates and plays the current progression with the current key and tempo.
+    fn update_progression(&mut self) -> Result<()> {
         self.audio.stop_progression()?;
-        let key = Key {
-            root: self.root,
-            mode: self.mode,
-        };
-        let start_chord: ChordSpec = self.template.rand_chord_for_mode(&key.mode);
-        self.progression = self.template.gen_progression(&start_chord, self.bars, &key.mode);
-        self.progression_in_key = self.progression.iter().map(|cs| (cs.0.chord_for_key(&key), cs.1)).collect();
+        self.progression_in_key = self.progression.iter().map(|cs| (cs.0.chord_for_key(&self.key), cs.1)).collect();
         self.audio.play_progression(self.tempo as f64, &self.progression_in_key)?;
-
         // If output is MIDI, mute the audio.
         // We don't pause it because its events
         // drive the MIDI output.
@@ -122,25 +117,43 @@ impl<'a> App<'a> {
             Output::Midi => self.audio.mute()?
         }
         Ok(())
+
+    }
+
+    /// Generates and plays a new random progression.
+    fn gen_progression(&mut self) -> Result<()> {
+        let start_chord: ChordSpec = self.template.rand_chord_for_mode(&self.key.mode);
+        self.progression = self.template.gen_progression(&start_chord, self.bars, &self.key.mode);
+        self.update_progression()?;
+        Ok(())
     }
 }
 
 fn render_progression<'a>(progression: &Vec<(ChordSpec, f64)>, key: &Key, idx: usize) -> Paragraph<'a> {
-    let mut width = 0;
-    let mut indices = vec![];
+    // The lines that will be rendered.
+    let mut lines = vec![];
+
+    // Keep track of the notes of each chord
+    // for displaying.
     let mut chord_notes = vec![];
+
+    // Keep track of how many lines are required
+    // to display the chord notes underneath.
+    // This is just the highest number of notes
+    // in a chord in the progression.
     let mut required_lines = 0;
+
+    // The spans for the chord
     let chord_name_spans: Vec<Span> = progression.iter().enumerate().map(|(i, (cs, _))| {
+        // Each chord has 5 spaces to work with
         let name = format!("{:^5}", cs.to_string());
 
         // For rendering chord notes
-        indices.push(width);
         let notes = cs.chord_for_key(&key).describe_notes();
         if notes.len() > required_lines {
             required_lines = notes.len();
         }
         chord_notes.push(notes);
-        width += name.len();
 
         let style = if i == idx {
             Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
@@ -149,16 +162,13 @@ fn render_progression<'a>(progression: &Vec<(ChordSpec, f64)>, key: &Key, idx: u
         };
         Span::styled(name, style)
     }).collect();
-
-    let mut lines = vec![
-        Spans::from(chord_name_spans),
-    ];
+    lines.push(Spans::from(chord_name_spans));
 
     for i in 0..required_lines {
         let mut cur_len = 0;
         let chord_note_spans: Vec<Span> = chord_notes.iter().enumerate().filter_map(|(j, notes)| {
             if i < notes.len() {
-                let position = indices[j];
+                let position = j * 5;
                 let padding = position - cur_len;
                 let padding = std::iter::repeat(' ').take(padding).collect::<String>();
                 let note = format!("{}{}", padding, notes[i]);
@@ -240,11 +250,11 @@ pub fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> Result<(
             let param_style = Style::default().fg(Color::LightBlue).add_modifier(Modifier::BOLD);
             let mut status = vec![
                 Span::raw("[r]oot:"),
-                Span::styled(app.root.to_string(), param_style),
+                Span::styled(app.key.root.to_string(), param_style),
                 Span::raw(" [b]ars:"),
                 Span::styled(app.bars.to_string(), param_style),
                 Span::raw(" [m]ode:"),
-                Span::styled(app.mode.to_string(), param_style),
+                Span::styled(app.key.mode.to_string(), param_style),
                 Span::raw(" [t]empo:"),
                 Span::styled(app.tempo.to_string(), param_style),
                 Span::raw(" [O]utput:"),
@@ -322,11 +332,7 @@ pub fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> Result<(
                 rect.render_widget(list, chunks[1]);
             }
 
-            let key = Key {
-                root: app.root,
-                mode: app.mode,
-            };
-            rect.render_widget(render_progression(&app.progression, &key, app.chord_idx), main_chunks[1]);
+            rect.render_widget(render_progression(&app.progression, &app.key, app.chord_idx), main_chunks[1]);
         })?;
 
         let timeout = tick_rate
@@ -353,10 +359,11 @@ pub fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> Result<(
                             app.input_target = InputTarget::Root;
                         }
                         KeyCode::Char('m') => {
-                            app.mode = match app.mode {
+                            app.key.mode = match app.key.mode {
                                 Mode::Major => Mode::Minor,
                                 Mode::Minor => Mode::Major,
                             };
+                            // Mode changes require a new progression
                             app.gen_progression()?;
                         }
                         KeyCode::Char('p') => {
@@ -436,13 +443,13 @@ pub fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> Result<(
                             if input.len() > 0 {
                                 match app.input_target {
                                     InputTarget::Root => {
-                                        app.root = match input.try_into() {
+                                        app.key.root = match input.try_into() {
                                             Ok(note) => {
                                                 note
                                             }
                                             Err(_) => {
                                                 app.message = "Invalid root note";
-                                                app.root
+                                                app.key.root
                                             }
                                         };
                                     }
@@ -454,7 +461,7 @@ pub fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> Result<(
                                     }
                                     _ => {}
                                 }
-                                app.gen_progression()?;
+                                app.update_progression()?;
                             }
                             app.input_mode = InputMode::Normal;
                         }
