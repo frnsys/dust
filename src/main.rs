@@ -5,6 +5,7 @@ mod chord;
 mod interval;
 mod progression;
 mod audio;
+mod midi;
 
 use std::fs::File;
 use std::io::BufReader;

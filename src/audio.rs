@@ -31,6 +31,10 @@ pub struct Progression {
     metronome: MetronomeHandle,
     chords: Vec<ArrangementHandle>,
     pub sequence: SequenceInstanceHandle<Event>,
+
+    // A silent sequence that doesn't emit sounds,
+    // for driving MIDI outpuut
+    pub event_sequence: SequenceInstanceHandle<Event>,
 }
 
 impl Audio {
@@ -53,8 +57,7 @@ impl Audio {
             {
                 let mut sequence = Sequence::new(SequenceSettings::default());
                 sequence.start_loop();
-                for (idx, (chord_handle, (_, beat))) in chord_handles.iter().zip(chords).enumerate() {
-                    sequence.emit(Event::Chord(idx));
+                for (chord_handle, (_, beat)) in chord_handles.iter().zip(chords) {
                     sequence.play(chord_handle, InstanceSettings::default());
                     sequence.wait(Duration::Beats(*beat));
                 }
@@ -62,11 +65,26 @@ impl Audio {
             },
             SequenceInstanceSettings::new().metronome(&metronome),
         )?;
+
+        let event_sequence_handle = self.manager.start_sequence::<Event>(
+            {
+                let mut sequence = Sequence::new(SequenceSettings::default());
+                sequence.start_loop();
+                for (idx, (_, (_, beat))) in chord_handles.iter().zip(chords).enumerate() {
+                    sequence.emit(Event::Chord(idx));
+                    sequence.wait(Duration::Beats(*beat));
+                }
+                sequence
+            },
+            SequenceInstanceSettings::new().metronome(&metronome),
+        )?;
+
         metronome.start()?;
         self.progression = Some(Progression {
             metronome,
-            sequence: sequence_handle,
             chords: chord_handles,
+            sequence: sequence_handle,
+            event_sequence: event_sequence_handle,
         });
         Ok(())
     }
@@ -104,6 +122,20 @@ impl Audio {
         Ok(())
     }
 
+    pub fn mute(&mut self) -> Result<()> {
+        if let Some(ref mut prog) = self.progression {
+            prog.sequence.mute()?
+        }
+        Ok(())
+    }
+
+    pub fn unmute(&mut self) -> Result<()> {
+        if let Some(ref mut prog) = self.progression {
+            prog.sequence.unmute()?
+        }
+        Ok(())
+    }
+
     pub fn is_paused(&self) -> bool {
         if let Some(ref prog) = self.progression {
             prog.sequence.state() == SequenceInstanceState::Paused
@@ -114,14 +146,16 @@ impl Audio {
 
     pub fn pause(&mut self) -> Result<()> {
         if let Some(ref mut prog) = self.progression {
-            prog.sequence.pause()?
+            prog.sequence.pause()?;
+            prog.event_sequence.pause()?;
         }
         Ok(())
     }
 
     pub fn resume(&mut self) -> Result<()> {
         if let Some(ref mut prog) = self.progression {
-            prog.sequence.resume()?
+            prog.sequence.resume()?;
+            prog.event_sequence.resume()?;
         }
         Ok(())
     }
