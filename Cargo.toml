@@ -13,3 +13,5 @@ anyhow = "1.0.52"
 thiserror = "1.0.30"
 tui = { version = "0.16", default-features = false, features = ['crossterm'] }
 crossterm = { version = "0.19" }
+serde = { version = "1.0", features = ["derive"] }
+serde_yaml = "0.8"

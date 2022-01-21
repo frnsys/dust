@@ -9,10 +9,11 @@ use tui::{
     widgets::{Block, Paragraph},
 };
 use anyhow::Result;
-use crate::key::{Key, Mode};
 use crate::note::Note;
+use crate::key::{Key, Mode};
+use crate::chord::ChordSpec;
 use crate::audio::{Audio, Event as AudioEvent};
-use crate::progression::ChordSpec;
+use crate::progression::ProgressionTemplate;
 
 enum InputMode {
     Normal,
@@ -44,25 +45,11 @@ pub struct App<'a> {
     chord_idx: usize,
     audio: Audio,
     progression: Vec<(ChordSpec, f64)>,
+    template: ProgressionTemplate,
 }
 
 impl<'a> App<'a> {
-    fn gen_progression(&mut self) -> Result<()> {
-        self.audio.stop_progression()?;
-        let key = Key {
-            root: self.root,
-            mode: self.mode,
-        };
-        let start_chord: ChordSpec = ChordSpec::rand_chord_for_mode(&key.mode);
-        self.progression = start_chord.gen_progression(self.bars, &key.mode);
-        let progression_in_key = self.progression.iter().map(|cs| (cs.0.chord_for_key(&key), cs.1)).collect();
-        self.audio.play_progression(self.tempo as f64, &progression_in_key)?;
-        Ok(())
-    }
-}
-
-impl<'a> Default for App<'a> {
-    fn default() -> App<'a> {
+    pub fn new(template: ProgressionTemplate) -> App<'a> {
         let mut app = App {
             chord_idx: 0,
             audio: Audio::new().unwrap(),
@@ -78,13 +65,26 @@ impl<'a> Default for App<'a> {
             root: Note {
                 semitones: 27
             }, // C3
-            progression: vec![]
+            progression: vec![],
+            template,
         };
         app.gen_progression().unwrap();
         app
     }
-}
 
+    fn gen_progression(&mut self) -> Result<()> {
+        self.audio.stop_progression()?;
+        let key = Key {
+            root: self.root,
+            mode: self.mode,
+        };
+        let start_chord: ChordSpec = self.template.rand_chord_for_mode(&key.mode);
+        self.progression = self.template.gen_progression(&start_chord, self.bars, &key.mode);
+        let progression_in_key = self.progression.iter().map(|cs| (cs.0.chord_for_key(&key), cs.1)).collect();
+        self.audio.play_progression(self.tempo as f64, &progression_in_key)?;
+        Ok(())
+    }
+}
 
 fn render_progression<'a>(progression: &Vec<(ChordSpec, f64)>, key: &Key, idx: usize) -> Paragraph<'a> {
     let mut width = 0;

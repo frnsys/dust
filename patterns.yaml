@@ -1,0 +1,22 @@
+major:
+  starts: [I, ii, iii, IV, V, vi, vii-]
+  pattern:
+    I: [I, ii, iii, IV, V, V7, vi, vii-]
+    ii: [V7, vii-]
+    iii: [IV, vi]
+    IV: [ii, V, V7, vii-]
+    V: [I, vii-]
+    V7: [I, vii-]
+    vi: [ii, IV]
+    vii-: [I, V, V7, vi]
+minor:
+  starts: [i, ii-, III, iv, V, VI, vii-, VII]
+  pattern:
+    i: [i, ii-, III, iv, V, VI, vii-, VII]
+    ii-: [V, vii-]
+    III: [iv, VI]
+    iv: [ii-, V, vii-]
+    V: [i, vii-]
+    VI: [iv, ii-]
+    vii-: [i, V, VI]
+    VII: [III]
