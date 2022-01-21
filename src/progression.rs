@@ -8,6 +8,7 @@ use std::{fmt, str::FromStr};
 use thiserror::Error;
 
 const NUMERALS: [&str; 7] = ["I", "II", "III", "IV", "V", "VI", "VII"];
+const TIMING_FACTORS: [f64; 8] = [1., 2., 3., 4., 5., 6., 7., 8.];
 
 fn numeral_to_index(numeral: &str) -> Option<usize> {
     NUMERALS.iter().position(|&n| n == numeral.to_uppercase())
@@ -173,13 +174,14 @@ impl ChordSpec {
         let cands = match mode {
             Mode::Major => {
                 match chord_name.as_ref() {
-                    "I" => vec!["I", "ii", "iii", "IV", "V", "vi", "vii-"],
-                    "ii" => vec!["V", "vii-"],
+                    "I" => vec!["I", "ii", "iii", "IV", "V", "V7", "vi", "vii-"],
+                    "ii" => vec!["V7", "vii-"],
                     "iii" => vec!["IV", "vi"],
-                    "IV" => vec!["ii", "V", "vii-"],
+                    "IV" => vec!["ii", "V", "V7", "vii-"],
                     "V" => vec!["I", "vii-"],
+                    "V7" => vec!["I", "vii-"],
                     "vi" => vec!["ii", "IV"],
-                    "vii-" => vec!["I", "V", "vi"],
+                    "vii-" => vec!["I", "V", "V7", "vi"],
                     _ => vec![]
                 }
             }
@@ -202,21 +204,44 @@ impl ChordSpec {
     }
 
     /// Generate a progression of chord specs from this chord spec.
-    pub fn gen_progression(&self, bars: usize, mode: &Mode) -> Vec<ChordSpec> {
+    pub fn gen_progression(&self, bars: usize, mode: &Mode) -> Vec<(ChordSpec, f64)> {
         let mut rng = rand::thread_rng();
-        let mut progression = vec![self.clone()];
+        let mut progression = vec![];
         let mut last = self.clone();
-        for _ in 0..bars-1 {
-            let cands = last.next(mode);
-            let next = cands.choose(&mut rng);
-            if next.is_none() {
-                break;
+        let timings = self.gen_timing(bars);
+        for beat in &timings {
+            let next = if progression.len() == 0 {
+                self.clone()
             } else {
-                last = next.unwrap().clone();
-                progression.push(last.clone());
-            }
+                let cands = last.next(mode);
+                let next = cands.choose(&mut rng);
+                if next.is_none() {
+                    break;
+                } else {
+                    next.unwrap().clone()
+                }
+            };
+
+            last = next.clone();
+            progression.push((next, *beat));
         }
         progression
+    }
+
+    fn gen_timing(&self, bars: usize) -> Vec<f64> {
+        let mut total = 0.;
+        let mut timings = vec![];
+        let mut rng = rand::thread_rng();
+        loop {
+            let factor = TIMING_FACTORS.choose(&mut rng).unwrap();
+            let beats = factor * 0.25;
+            total += beats;
+            if total >= bars as f64 {
+                break;
+            }
+            timings.push(beats);
+        }
+        timings
     }
 }
 

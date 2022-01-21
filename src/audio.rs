@@ -5,7 +5,7 @@ use kira::{
 	sound::{SoundSettings, handle::SoundHandle},
 	manager::{AudioManager, AudioManagerSettings},
 	instance::InstanceSettings,
-    sequence::{Sequence, SequenceSettings, SequenceInstanceSettings, handle::SequenceInstanceHandle},
+    sequence::{Sequence, SequenceSettings, SequenceInstanceSettings, SequenceInstanceState, handle::SequenceInstanceHandle},
     metronome::{MetronomeSettings, handle::MetronomeHandle},
 };
 use std::collections::HashMap;
@@ -14,7 +14,7 @@ use anyhow::Result;
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
 pub enum Event {
-	Beat,
+	Chord(usize),
 }
 
 pub struct Audio {
@@ -24,13 +24,13 @@ pub struct Audio {
     sounds: HashMap<String, SoundHandle>,
 
     /// Currently playing progression
-    progression: Option<Progression>,
+    pub progression: Option<Progression>,
 }
 
-struct Progression {
+pub struct Progression {
     metronome: MetronomeHandle,
-    sequence: SequenceInstanceHandle<Event>,
     chords: Vec<ArrangementHandle>,
+    pub sequence: SequenceInstanceHandle<Event>,
 }
 
 impl Audio {
@@ -43,20 +43,20 @@ impl Audio {
         })
     }
 
-    pub fn play_progression(&mut self, tempo: f64, chords: &Vec<Chord>) -> Result<()> {
+    pub fn play_progression(&mut self, tempo: f64, chords: &Vec<(Chord, f64)>) -> Result<()> {
         let tempo = Tempo(tempo);
         let mut metronome = self.manager.add_metronome(MetronomeSettings::new().tempo(tempo))?;
         let chord_handles: Vec<ArrangementHandle> = chords.iter()
-            .map(|chord| self.build_chord(chord)).collect::<Result<Vec<_>, _>>()?;
+            .map(|(chord, _)| self.build_chord(chord)).collect::<Result<Vec<_>, _>>()?;
 
         let sequence_handle = self.manager.start_sequence::<Event>(
             {
                 let mut sequence = Sequence::new(SequenceSettings::default());
                 sequence.start_loop();
-                for chord_handle in &chord_handles {
-                    sequence.emit(Event::Beat);
+                for (idx, (chord_handle, (_, beat))) in chord_handles.iter().zip(chords).enumerate() {
+                    sequence.emit(Event::Chord(idx));
                     sequence.play(chord_handle, InstanceSettings::default());
-                    sequence.wait(Duration::Beats(1.0));
+                    sequence.wait(Duration::Beats(*beat));
                 }
                 sequence
             },
@@ -100,6 +100,28 @@ impl Audio {
             for chord in &prog.chords {
                 self.manager.remove_arrangement(chord)?;
             }
+        }
+        Ok(())
+    }
+
+    pub fn is_paused(&self) -> bool {
+        if let Some(ref prog) = self.progression {
+            prog.sequence.state() == SequenceInstanceState::Paused
+        } else {
+            true
+        }
+    }
+
+    pub fn pause(&mut self) -> Result<()> {
+        if let Some(ref mut prog) = self.progression {
+            prog.sequence.pause()?
+        }
+        Ok(())
+    }
+
+    pub fn resume(&mut self) -> Result<()> {
+        if let Some(ref mut prog) = self.progression {
+            prog.sequence.resume()?
         }
         Ok(())
     }
