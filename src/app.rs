@@ -265,7 +265,7 @@ pub fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> Result<(
             let param_style = Style::default().fg(Color::LightBlue).add_modifier(Modifier::BOLD);
             let status = if app.input_mode == InputMode::Chord {
                 vec![
-                    Span::raw("[p]in [k]:up [j]:down [q]:back"),
+                    Span::raw("[p]in [e]dit [k]:up [j]:down [q]:back"),
                 ]
             } else {
                 let mut status = vec![
@@ -291,7 +291,6 @@ pub fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> Result<(
                     status.push(
                         Span::styled(port_name, param_style));
                 }
-                status.push(Span::raw(" [e]dit"));
                 status.push(Span::raw(if app.audio.is_paused() {
                     " [p]lay"
                 } else {
@@ -501,6 +500,17 @@ pub fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> Result<(
                                         app.bars = input.parse::<usize>()?;
                                         app.gen_progression()?;
                                     }
+                                    InputTarget::Chord(i) => {
+                                        let chord_spec: Result<ChordSpec, _> = input.try_into();
+                                        match chord_spec {
+                                            Ok(cs) => {
+                                                app.progression[i].0 = cs;
+                                            }
+                                            Err(_) => {
+                                                app.message = "Invalid chord"
+                                            }
+                                        }
+                                    }
                                     _ => {}
                                 }
                                 app.update_progression()?;
@@ -513,7 +523,10 @@ pub fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> Result<(
                                     if c.is_alphanumeric() {
                                         app.input.push(c);
                                     }
-                                },
+                                }
+                                InputTarget::Chord(_) => {
+                                    app.input.push(c);
+                                }
                                 _ => {
                                     if c.is_numeric() {
                                         app.input.push(c);
@@ -530,6 +543,9 @@ pub fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> Result<(
                         _ => {}
                     },
                     InputMode::Chord => match key.code {
+                        KeyCode::Char('e') => {
+                            app.input_mode = InputMode::Editing;
+                        }
                         KeyCode::Char('k') => {
                             // Cycle up a chord
                             match app.input_target {
