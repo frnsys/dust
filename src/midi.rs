@@ -1,6 +1,6 @@
 use anyhow::Result;
 use thiserror::Error;
-use crate::chord::Chord;
+use crate::core::Chord;
 use midir::{MidiOutput, MidiOutputConnection, InitError, ConnectError};
 use std::{thread, sync::{Arc, Mutex}};
 use std::{thread::sleep, time::Duration};

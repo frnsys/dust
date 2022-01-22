@@ -1,9 +1,9 @@
 use regex::Regex;
 use thiserror::Error;
-use crate::note::Note;
-use crate::interval::Interval;
-use crate::key::{Key, Mode, MAJOR, MINOR};
 use std::{fmt, str::FromStr};
+use super::note::Note;
+use super::interval::Interval;
+use super::key::{Key, Mode, MAJOR, MINOR};
 
 const NUMERALS: [&str; 7] = ["I", "II", "III", "IV", "V", "VI", "VII"];
 
@@ -406,8 +406,6 @@ impl Chord {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::key::Mode;
-    use crate::note::Note;
 
     #[test]
     fn test_chord_notes() {

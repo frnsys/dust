@@ -1,6 +1,6 @@
 use std::fmt;
-use crate::note::Note;
-use crate::interval::Interval;
+use super::note::Note;
+use super::interval::Interval;
 
 pub const MAJOR: [usize; 7] = [0, 2, 4, 5, 7, 9, 11];
 pub const MINOR: [usize; 7] = [0, 1, 3, 5, 7, 8, 10];

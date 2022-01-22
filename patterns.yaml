@@ -10,13 +10,13 @@ major:
     vi: [ii, IV]
     vii-: [I, V, V:b7, vi]
 minor:
-  starts: [i, ii-, III, iv, V, VI, vii-, VII]
+  starts: [i, ii-, III, iv, V, VI, vii-, bVII]
   pattern:
-    i: [i, ii-, III, iv, V, VI, vii-, VII]
+    i: [i, ii-, III, iv, V, VI, vii-, bVII]
     ii-: [V, vii-]
     III: [iv, VI]
     iv: [ii-, V, vii-]
     V: [i, vii-]
     VI: [iv, ii-]
     vii-: [i, V, VI]
-    VII: [III]
+    bVII: [III, iv]

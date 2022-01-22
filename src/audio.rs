@@ -9,7 +9,7 @@ use kira::{
     metronome::{MetronomeSettings, handle::MetronomeHandle},
 };
 use std::collections::HashMap;
-use crate::{chord::Chord, note::Note};
+use crate::core::{Chord, Note};
 use anyhow::Result;
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]

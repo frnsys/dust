@@ -1,8 +1,7 @@
-use crate::key::Mode;
-use crate::chord::ChordSpec;
 use rand::seq::SliceRandom;
 use std::collections::HashMap;
 use serde::Deserialize;
+use crate::core::{Mode, ChordSpec};
 
 const TIMING_FACTORS: [f64; 8] = [1., 2., 3., 4., 5., 6., 7., 8.];
 
@@ -102,8 +101,6 @@ impl ProgressionTemplate {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::key::Mode;
-    use crate::chord::ChordSpec;
 
     #[test]
     fn test_chord_progression() {

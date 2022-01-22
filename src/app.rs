@@ -12,12 +12,10 @@ use tui::{
     widgets::{Block, Paragraph, Borders},
 };
 use anyhow::Result;
-use crate::note::Note;
-use crate::key::{Key, Mode};
-use crate::chord::{Chord, ChordSpec};
-use crate::audio::{Audio, Event as AudioEvent};
 use crate::midi::MIDI;
+use crate::audio::{Audio, Event as AudioEvent};
 use crate::progression::ProgressionTemplate;
+use crate::core::{Note, Key, Mode, Chord, ChordSpec};
 
 const TICK_RATE: Duration = Duration::from_millis(200);
 

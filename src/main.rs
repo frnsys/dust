@@ -1,8 +1,5 @@
 mod app;
-mod key;
-mod note;
-mod chord;
-mod interval;
+mod core;
 mod progression;
 mod audio;
 mod midi;

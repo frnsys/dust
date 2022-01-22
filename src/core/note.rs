@@ -1,8 +1,8 @@
 use regex::Regex;
 use thiserror::Error;
-use crate::interval::Interval;
 use std::{fmt, str::FromStr};
 use std::ops::{Add, Sub};
+use super::interval::Interval;
 
 const NAMES: [&str; 12] = ["A", "Bb", "B", "C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab"];
 
