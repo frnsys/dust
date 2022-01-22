@@ -22,7 +22,7 @@ impl ProgressionTemplate {
     /// Chord progressions
     /// Return a list of candidate chord specs
     /// to follow this one.
-    fn next(&self, chord: &ChordSpec, mode: &Mode) -> Vec<ChordSpec> {
+    pub fn next(&self, chord: &ChordSpec, mode: &Mode) -> Vec<ChordSpec> {
         let default = vec![];
         let chord_name = chord.to_string();
         let cands = match mode {
@@ -32,6 +32,14 @@ impl ProgressionTemplate {
             Mode::Minor => {
                 self.minor.pattern.get(&chord_name).unwrap_or(&default)
             }
+        };
+        cands.into_iter().map(|c| c.to_owned().try_into().unwrap()).collect()
+    }
+
+    pub fn starts(&self, mode: &Mode) -> Vec<ChordSpec> {
+        let cands = match mode {
+            Mode::Major => &self.major.starts,
+            Mode::Minor => &self.minor.starts
         };
         cands.into_iter().map(|c| c.to_owned().try_into().unwrap()).collect()
     }
@@ -61,6 +69,7 @@ impl ProgressionTemplate {
         progression
     }
 
+    /// Generates random timings for chords in the progression.
     fn gen_timing(&self, bars: usize) -> Vec<f64> {
         let mut total = 0.;
         let mut timings = vec![];
@@ -77,6 +86,7 @@ impl ProgressionTemplate {
         timings
     }
 
+    /// Generates a random starting chord given a mode.
     pub fn rand_chord_for_mode(&self, mode: &Mode) -> ChordSpec {
         let mut rng = rand::thread_rng();
         let cands = match mode {
@@ -93,17 +103,20 @@ impl ProgressionTemplate {
 mod test {
     use super::*;
     use crate::key::Mode;
-    use crate::chord::{ChordSpec, Quality};
+    use crate::chord::ChordSpec;
 
     #[test]
     fn test_chord_progression() {
         let bars = 4;
         let mode = Mode::Major;
-        let start = ChordSpec::new(1, Quality::Major);
+        let start = ChordSpec::new(1, Mode::Major);
+        let mut pattern = HashMap::default();
+        pattern.insert("I".to_string(), vec!["V".to_string()]);
+        pattern.insert("V".to_string(), vec!["I".to_string()]);
         let template = ProgressionTemplate {
             major: ModeTemplate {
                 starts: vec![],
-                pattern: HashMap::default()
+                pattern,
             },
             minor: ModeTemplate {
                 starts: vec![],
@@ -111,6 +124,6 @@ mod test {
             }
         };
         let progression = template.gen_progression(&start, bars, &mode);
-        assert_eq!(progression.len(), bars);
+        assert!(progression.len() > 1);
     }
 }

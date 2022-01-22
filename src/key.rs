@@ -2,8 +2,8 @@ use std::fmt;
 use crate::note::Note;
 use crate::interval::Interval;
 
-pub const MAJOR: [usize; 8] = [0, 2, 4, 5, 7, 9, 11, 12];
-pub const MINOR: [usize; 8] = [0, 1, 3, 5, 7, 8, 10, 12];
+pub const MAJOR: [usize; 7] = [0, 2, 4, 5, 7, 9, 11];
+pub const MINOR: [usize; 7] = [0, 1, 3, 5, 7, 8, 10];
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub enum Mode {

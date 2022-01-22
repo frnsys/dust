@@ -1,3 +1,5 @@
+// TODO clean this up!
+
 use std::fmt;
 use crossterm::event::{self, Event, KeyCode};
 use::std::time::{Duration, Instant};
@@ -17,11 +19,14 @@ use crate::audio::{Audio, Event as AudioEvent};
 use crate::midi::MIDI;
 use crate::progression::ProgressionTemplate;
 
+const TICK_RATE: Duration = Duration::from_millis(200);
+
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 enum InputMode {
     Normal,
     Editing,
     Select,
+    Chord,
 }
 
 enum InputTarget {
@@ -29,6 +34,7 @@ enum InputTarget {
     Tempo,
     Bars,
     MidiPort,
+    Chord(usize),
 }
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
@@ -129,7 +135,7 @@ impl<'a> App<'a> {
     }
 }
 
-fn render_progression<'a>(progression: &Vec<(ChordSpec, f64)>, key: &Key, idx: usize) -> Paragraph<'a> {
+fn render_progression<'a>(progression: &Vec<(ChordSpec, f64)>, key: &Key, idx: usize, selected: Option<usize>) -> Paragraph<'a> {
     // The lines that will be rendered.
     let mut lines = vec![];
 
@@ -142,6 +148,19 @@ fn render_progression<'a>(progression: &Vec<(ChordSpec, f64)>, key: &Key, idx: u
     // This is just the highest number of notes
     // in a chord in the progression.
     let mut required_lines = 0;
+
+    let chord_id_spans: Vec<Span> = (0..progression.len()).map(|i| {
+        // Each chord has 5 spaces to work with
+        let name = format!("{:^5}", (i+1).to_string());
+
+        let mut style = if selected.is_some() && i == selected.unwrap() {
+            Style::default().fg(Color::LightBlue)
+        } else {
+            Style::default()
+        };
+        Span::styled(name, style)
+    }).collect();
+    lines.push(Spans::from(chord_id_spans));
 
     // The spans for the chord
     let chord_name_spans: Vec<Span> = progression.iter().enumerate().map(|(i, (cs, _))| {
@@ -168,7 +187,7 @@ fn render_progression<'a>(progression: &Vec<(ChordSpec, f64)>, key: &Key, idx: u
         let mut cur_len = 0;
         let chord_note_spans: Vec<Span> = chord_notes.iter().enumerate().filter_map(|(j, notes)| {
             if i < notes.len() {
-                let position = j * 5;
+                let position = j * 5; // Each chord has 5 spaces to work with
                 let padding = position - cur_len;
                 let padding = std::iter::repeat(' ').take(padding).collect::<String>();
                 let note = format!("{}{}", padding, notes[i]);
@@ -191,7 +210,6 @@ fn render_progression<'a>(progression: &Vec<(ChordSpec, f64)>, key: &Key, idx: u
 
 pub fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> Result<()> {
     let mut last_tick = Instant::now();
-    let tick_rate = Duration::from_millis(200);
     loop {
         if let Some(ref mut prog) = app.audio.progression {
             if let Some(event) = prog.event_sequence.pop_event()? {
@@ -248,36 +266,44 @@ pub fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> Result<(
                 .split(chunks[0]);
 
             let param_style = Style::default().fg(Color::LightBlue).add_modifier(Modifier::BOLD);
-            let mut status = vec![
-                Span::raw("[r]oot:"),
-                Span::styled(app.key.root.to_string(), param_style),
-                Span::raw(" [b]ars:"),
-                Span::styled(app.bars.to_string(), param_style),
-                Span::raw(" [m]ode:"),
-                Span::styled(app.key.mode.to_string(), param_style),
-                Span::raw(" [t]empo:"),
-                Span::styled(app.tempo.to_string(), param_style),
-                Span::raw(" [O]utput:"),
-                Span::styled(app.output.to_string(), param_style),
-            ];
-            if app.output == Output::Midi {
-                let port_name = if let Some(name) = &app.midi.name {
-                    name.clone()
-                } else {
-                    "none".to_string()
-                };
-                status.push(
-                    Span::raw(" [P]ort:"));
-                status.push(
-                    Span::styled(port_name, param_style));
-            }
-            status.push(Span::raw(if app.audio.is_paused() {
-                " [p]lay"
+            let status = if app.input_mode == InputMode::Chord {
+                vec![
+                    Span::raw("[p]in [k]:up [j]:down [q]:back"),
+                ]
             } else {
-                " [p]ause"
-            }));
-            status.push(
-                Span::raw(" [R]oll [q]uit"));
+                let mut status = vec![
+                    Span::raw("[r]oot:"),
+                    Span::styled(app.key.root.to_string(), param_style),
+                    Span::raw(" [b]ars:"),
+                    Span::styled(app.bars.to_string(), param_style),
+                    Span::raw(" [m]ode:"),
+                    Span::styled(app.key.mode.to_string(), param_style),
+                    Span::raw(" [t]empo:"),
+                    Span::styled(app.tempo.to_string(), param_style),
+                    Span::raw(" [O]utput:"),
+                    Span::styled(app.output.to_string(), param_style),
+                ];
+                if app.output == Output::Midi {
+                    let port_name = if let Some(name) = &app.midi.name {
+                        name.clone()
+                    } else {
+                        "none".to_string()
+                    };
+                    status.push(
+                        Span::raw(" [P]ort:"));
+                    status.push(
+                        Span::styled(port_name, param_style));
+                }
+                status.push(Span::raw(" [e]dit"));
+                status.push(Span::raw(if app.audio.is_paused() {
+                    " [p]lay"
+                } else {
+                    " [p]ause"
+                }));
+                status.push(
+                    Span::raw(" [R]oll [q]uit"));
+                status
+            };
             let help = Paragraph::new(Spans::from(status))
                 .style(Style::default())
                 .alignment(Alignment::Left)
@@ -292,6 +318,7 @@ pub fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> Result<(
                         InputTarget::Tempo => "Tempo: ",
                         InputTarget::Bars => "Bars: ",
                         InputTarget::MidiPort => "Port: ",
+                        InputTarget::Chord(_) => "Chord: ",
                     };
                     let spans = Spans::from(vec![
                         Span::raw(label),
@@ -304,7 +331,7 @@ pub fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> Result<(
                             Block::default()
                         )
                 }
-                InputMode::Normal => {
+                InputMode::Normal | InputMode::Chord => {
                     Paragraph::new(app.message)
                         .style(Style::default())
                         .alignment(Alignment::Right)
@@ -332,10 +359,18 @@ pub fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> Result<(
                 rect.render_widget(list, chunks[1]);
             }
 
-            rect.render_widget(render_progression(&app.progression, &app.key, app.chord_idx), main_chunks[1]);
+            let selected_chord = if app.input_mode == InputMode::Chord {
+                match app.input_target {
+                    InputTarget::Chord(i) => Some(i),
+                    _ => None
+                }
+            } else {
+                None
+            };
+            rect.render_widget(render_progression(&app.progression, &app.key, app.chord_idx, selected_chord), main_chunks[1]);
         })?;
 
-        let timeout = tick_rate
+        let timeout = TICK_RATE
             .checked_sub(last_tick.elapsed())
             .unwrap_or_else(|| Duration::from_secs(0));
         if event::poll(timeout)? {
@@ -402,6 +437,15 @@ pub fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> Result<(
                         }
                         KeyCode::Char('q') => {
                             return Ok(());
+                        }
+                        KeyCode::Char(c) => {
+                            if c.is_numeric() {
+                                let idx = c.to_string().parse::<usize>()?;
+                                if idx > 0 && idx <= app.progression.len() {
+                                    app.input_mode = InputMode::Chord;
+                                    app.input_target = InputTarget::Chord(idx-1);
+                                }
+                            }
                         }
                         _ => {}
                     }
@@ -487,9 +531,76 @@ pub fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> Result<(
                         }
                         _ => {}
                     },
+                    InputMode::Chord => match key.code {
+                        KeyCode::Char('k') => {
+                            // Cycle up a chord
+                            match app.input_target {
+                                InputTarget::Chord(i) => {
+                                    let cands = if i == 0 {
+                                        app.template.starts(&app.key.mode)
+                                    } else {
+                                        let chord_spec = &app.progression[i-1].0;
+                                        app.template.next(chord_spec, &app.key.mode)
+                                    };
+                                    let current = &app.progression[i].0;
+                                    let idx = if let Some(idx) = cands.iter().position(|cs| cs == current) {
+                                        if idx == cands.len() - 1 {
+                                            0
+                                        } else {
+                                            idx + 1
+                                        }
+                                    } else {
+                                        0
+                                    };
+                                    app.progression[i].0 = cands[idx].clone();
+                                    app.update_progression()?;
+                                }
+                                _ => {}
+                            }
+                        }
+                        KeyCode::Char('j') => {
+                            // Cycle down a chord
+                            match app.input_target {
+                                InputTarget::Chord(i) => {
+                                    let cands = if i == 0 {
+                                        app.template.starts(&app.key.mode)
+                                    } else {
+                                        let chord_spec = &app.progression[i-1].0;
+                                        app.template.next(chord_spec, &app.key.mode)
+                                    };
+                                    let current = &app.progression[i].0;
+                                    let idx = if let Some(idx) = cands.iter().position(|cs| cs == current) {
+                                        if idx == 0 {
+                                            cands.len() - 1
+                                        } else {
+                                            idx - 1
+                                        }
+                                    } else {
+                                        0
+                                    };
+                                    app.progression[i].0 = cands[idx].clone();
+                                    app.update_progression()?;
+                                }
+                                _ => {}
+                            }
+                        }
+                        KeyCode::Esc | KeyCode::Char('q') => {
+                            app.input_mode = InputMode::Normal;
+                        }
+                        KeyCode::Char(c) => {
+                            if c.is_numeric() {
+                                let idx = c.to_string().parse::<usize>()?;
+                                if idx > 0 && idx <= app.progression.len() {
+                                    app.input_mode = InputMode::Chord;
+                                    app.input_target = InputTarget::Chord(idx-1);
+                                }
+                            }
+                        }
+                        _ => {}
+                    }
                 }
             }
-            if last_tick.elapsed() >= tick_rate {
+            if last_tick.elapsed() >= TICK_RATE {
                 last_tick = Instant::now();
             }
         }

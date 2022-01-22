@@ -5,7 +5,7 @@ Two output modes:
 
 ## Bitwig MIDI setup
 
-1. Run `sudo modprobe snd_virmidi`
+1. Setup virtual MIDI ports with `sudo modprobe snd_virmidi`
     - To have this automatically load on boot, edit `/etc/modules` and add `snd-virmidi`
 2. Launch `bitwig-studio`
 3. Then click the settings and add a generic controller. In the MIDI input dropdown you should see several "Virtual Raw MIDI" devices.
@@ -13,3 +13,25 @@ Two output modes:
 5. When running `dust`, press `O` to change the output to MIDI, then select the matching MIDI port.
 
 See also: <https://github.com/anton-k/linux-audio-howto/blob/master/doc/os-setup/virtual-midi.md>
+
+## Defining chord progression patterns
+
+See `pattern.yaml`.
+
+The chord naming system here is a little different than the conventional roman numeral system, and designed to be less ambiguous and easier to represent with ASCII text. It consists of the following parts:
+
+1. The scale degree and mode of the chord is defined by a roman numeral. Uppercase is major, lowercase is minor.
+2. Optional: The triad quality:
+    - `+` for augmented (M3+a5)
+    - `-` for diminished (m3+d5)
+    - `^` for sustained 4 (P4+P5)
+    - `_` for sustained 2 (M2+P5)
+    - If absent, is either major (M3+P5) or minor (m3+P5) depending on the roman numeral
+3. Optional: After `:`, additional intervals are expressed by scale degree (relative to the mode of the chord), and comma separated (optional).
+    - Degrees can be prefixed with `#` or `b` to move them up or down a step
+    - These _do not stack_; i.e. if you want to have a dominant 9th it needs to be written as `V:b7,9` and not `V:9`
+    - Note that this is different than conventional notation, which isn't really systematic! For example, the dominant 7th is conventionally notated as `V7`; a more straightforward notation would have this mean the major 7th. Here the dominant 7th is notated as `V:b7` and the major 7th is notated as `V:7`.
+4. Optional: After `%`, specify a different bass interval
+    - E.g. `III%3` sets the major 3rd to be the bass note
+5. Optional: After `/`, specify a different relative key
+    - E.g. `V:b7/V` is a secondary dominant (this would normally be notated `V7/V`)
