@@ -188,7 +188,7 @@ fn render_progression<'a>(progression: &Vec<(ChordSpec, f64)>, key: &Key, idx: u
                 let position = j * 5; // Each chord has 5 spaces to work with
                 let padding = position - cur_len;
                 let padding = std::iter::repeat(' ').take(padding).collect::<String>();
-                let note = format!("{}{}", padding, notes[i]);
+                let note = format!("{}{:^5}", padding, notes[i]);
                 cur_len += note.len();
                 Some(Span::raw(note))
             } else {
@@ -500,6 +500,7 @@ pub fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> Result<(
                                     }
                                     InputTarget::Bars => {
                                         app.bars = input.parse::<usize>()?;
+                                        app.gen_progression()?;
                                     }
                                     _ => {}
                                 }
