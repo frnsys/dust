@@ -1,22 +1,21 @@
 major:
-  starts: [I, ii, iii, IV, V, V:b7, vi, vii-]
-  pattern:
-    I: [I, ii, iii, IV, V, V:b7, vi, vii-]
-    ii: [vii-]
-    iii: [IV, vi]
-    IV: [ii, V, V:b7, vii-]
-    V: [I, vii-]
-    V:b7: [I, vii-]
-    vi: [ii, IV]
-    vii-: [I, V, V:b7, vi]
+  patterns:
+    - I:7 ii:7 IV:7
+    - I ii IV
+    - vi IV I V
+    - I V vi IV
+    - I IV I V
+    - I IV I V:b7
+    - I IV V IV
+    - I vi IV V
+    - I vi ii V
+    - I ii iii IV
+    - I bIII IV
 minor:
-  starts: [i, ii-, III, iv, V, VI, vii-, bVII]
-  pattern:
-    i: [i, ii-, III, iv, V, VI, vii-, bVII]
-    ii-: [V, vii-]
-    III: [iv, VI]
-    iv: [ii-, V, vii-]
-    V: [i, vii-]
-    VI: [iv, ii-]
-    vii-: [i, V, VI]
-    bVII: [III, iv]
+  patterns:
+    - i v iv V
+    - i III v IV
+    - VI iv i VII
+    - i VII VI V
+    - i III IV VI
+    - i III iv VI

@@ -126,8 +126,7 @@ impl<'a> App<'a> {
 
     /// Generates and plays a new random progression.
     fn gen_progression(&mut self) -> Result<()> {
-        let start_chord: ChordSpec = self.template.rand_chord_for_mode(&self.key.mode);
-        self.progression = self.template.gen_progression(&start_chord, self.bars, &self.key.mode);
+        self.progression = self.template.gen_progression(self.bars, &self.key.mode);
         self.update_progression()?;
         Ok(())
     }
@@ -536,7 +535,8 @@ pub fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> Result<(
                             match app.input_target {
                                 InputTarget::Chord(i) => {
                                     let cands = if i == 0 {
-                                        app.template.starts(&app.key.mode)
+                                        let chord_spec = &app.progression[i+1].0;
+                                        app.template.next(chord_spec, &app.key.mode)
                                     } else {
                                         let chord_spec = &app.progression[i-1].0;
                                         app.template.next(chord_spec, &app.key.mode)
@@ -562,7 +562,8 @@ pub fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> Result<(
                             match app.input_target {
                                 InputTarget::Chord(i) => {
                                     let cands = if i == 0 {
-                                        app.template.starts(&app.key.mode)
+                                        let chord_spec = &app.progression[i+1].0;
+                                        app.template.next(chord_spec, &app.key.mode)
                                     } else {
                                         let chord_spec = &app.progression[i-1].0;
                                         app.template.next(chord_spec, &app.key.mode)

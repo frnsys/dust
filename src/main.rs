@@ -33,7 +33,8 @@ fn main() -> Result<()> {
     let args = Args::parse();
     let file = File::open(args.patterns).expect("could not open file");
     let reader = BufReader::new(file);
-    let template: ProgressionTemplate = serde_yaml::from_reader(reader).expect("error while reading yaml");
+    let mut template: ProgressionTemplate = serde_yaml::from_reader(reader).expect("error while reading yaml");
+    template.update_transitions();
 
     enable_raw_mode()?;
 
