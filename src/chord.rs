@@ -88,6 +88,7 @@ pub enum Triad {
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct ChordSpec {
     degree: usize,
+    adj: isize,
     mode: Mode,
     triad: Triad,
     extensions: Vec<Extension>,
@@ -100,6 +101,7 @@ impl ChordSpec {
         ChordSpec {
             degree,
             mode,
+            adj: 0,
             triad: Triad::Mode,
             extensions: vec![],
             bass_degree: None,
@@ -144,6 +146,12 @@ impl ChordSpec {
         self
     }
 
+    /// Sets an semitone adjustment, for chromatic roots
+    pub fn adj(mut self, adj: isize) -> ChordSpec {
+        self.adj = adj;
+        self
+    }
+
     pub fn intervals(&self) -> Vec<isize> {
         let offset = match self.rel_key {
             None => 0,
@@ -153,7 +161,7 @@ impl ChordSpec {
                     Mode::Minor => MINOR[degree - 1 % 7]
                 }
             }
-        };
+        } as isize + self.adj;
 
         let mode = match self.rel_key {
             None => self.mode,
@@ -199,7 +207,7 @@ impl ChordSpec {
         } else {
             intervals
         };
-        intervals.iter().map(|intv| offset as isize + *intv).collect()
+        intervals.iter().map(|intv| offset + *intv).collect()
     }
 
     /// Resolve the chord spec into actual semitones
@@ -235,17 +243,22 @@ pub enum ChordParseError {
 impl FromStr for ChordSpec {
     type Err = ChordParseError;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let re = Regex::new(r"^([IV]+|[iv]+)([+-^_])?(:([b#]?\d+,?)*)?(%([b#]?\d+))?(/([IV]+|[iv]+))?$").unwrap();
+        let re = Regex::new(r"^([b#])*([IV]+|[iv]+)([+-^_])?(:([b#]?\d+,?)*)?(%([b#]?\d+))?(/([IV]+|[iv]+))?$").unwrap();
         let caps = re.captures(s).ok_or(ChordParseError::InvalidChord(s.to_string()))?;
-        let numeral = caps.get(1)
+        let adj = caps.get(1).and_then(|m| Some(m.as_str()));
+        let numeral = caps.get(2)
             .ok_or(ChordParseError::InvalidNumeral("(none)".to_string()))?
             .as_str();
-        let triad = caps.get(2).and_then(|m| Some(m.as_str()));
-        let exts = caps.get(3).and_then(|m| Some(m.as_str()));
-        let bass_degree = caps.get(5).and_then(|m| Some(m.as_str()));
-        let rel_key = caps.get(8).and_then(|m| Some(m.as_str()));
+        let triad = caps.get(3).and_then(|m| Some(m.as_str()));
+        let exts = caps.get(4).and_then(|m| Some(m.as_str()));
+        let bass_degree = caps.get(6).and_then(|m| Some(m.as_str()));
+        let rel_key = caps.get(9).and_then(|m| Some(m.as_str()));
 
         let mode = numeral_to_mode(numeral)?;
+        let adj = match adj {
+            Some(adj) => adj.matches('#').count() as isize - adj.matches('b').count() as isize,
+            None => 0
+        };
 
         let triad = match triad {
             Some(triad) => {
@@ -293,6 +306,7 @@ impl FromStr for ChordSpec {
             Ok(ChordSpec {
                 // Convert to 1-indexed degrees
                 degree: degree_0 + 1,
+                adj,
                 triad,
                 mode,
                 extensions: exts,
@@ -560,6 +574,30 @@ mod test {
     }
 
     #[test]
+    fn test_chord_for_keys_adj() {
+        let key = Key {
+            root: "C3".try_into().unwrap(),
+            mode: Mode::Major,
+        };
+
+        let spec: ChordSpec = "bVII".try_into().unwrap();
+        let chord = spec.chord_for_key(&key);
+        let notes = chord.notes();
+        let expected = vec![Note {
+            semitones: 37
+        }, Note {
+            semitones: 41
+        }, Note {
+            semitones: 44
+        }];
+        assert_eq!(notes.len(), expected.len());
+        for (a, b) in notes.iter().zip(expected) {
+            assert_eq!(*a, b);
+        }
+    }
+
+
+    #[test]
     fn test_parse_chord_spec() {
         let name = "III";
         let spec: ChordSpec = name.try_into().unwrap();
@@ -599,6 +637,11 @@ mod test {
         let name = "V^:7,9%5/ii";
         let spec: ChordSpec = name.try_into().unwrap();
         let expected = ChordSpec::new(5, Mode::Major).triad(Triad::Sus4).add(7, 0).add(9, 0).key_of(2, Mode::Minor).bass(5, 0);
+        assert_eq!(spec, expected);
+
+        let name = "bVII";
+        let spec: ChordSpec = name.try_into().unwrap();
+        let expected = ChordSpec::new(7, Mode::Major).adj(-1);
         assert_eq!(spec, expected);
     }
 
