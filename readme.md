@@ -27,6 +27,7 @@ The chord naming system here is a little different than the conventional roman n
     - `-` for diminished (m3+d5)
     - `^` for sustained 4 (P4+P5)
     - `_` for sustained 2 (M2+P5)
+    - `5` for power chord (+P5)
     - If absent, is either major (M3+P5) or minor (m3+P5) depending on the roman numeral
 4. Optional: After `:`, additional intervals are expressed by scale degree (relative to the mode of the chord), and comma separated (optional).
     - Degrees can be prefixed with `#` or `b` to move them up or down a step

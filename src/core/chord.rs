@@ -83,6 +83,7 @@ pub enum Triad {
     Augmented,
     Sus2,
     Sus4,
+    Power,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -191,6 +192,9 @@ impl ChordSpec {
             Triad::Sus4 => {
                 vec![0, 5, 7]
             }
+            Triad::Power => {
+                vec![0, 7]
+            }
         };
 
         for ext in &self.extensions {
@@ -243,7 +247,7 @@ pub enum ChordParseError {
 impl FromStr for ChordSpec {
     type Err = ChordParseError;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let re = Regex::new(r"^([b#])*([IV]+|[iv]+)([+-^_])?(:([b#]?\d+,?)*)?(%([b#]?\d+))?(/([IV]+|[iv]+))?$").unwrap();
+        let re = Regex::new(r"^([b#])*([IV]+|[iv]+)([+-^_5])?(:([b#]?\d+,?)*)?(%([b#]?\d+))?(/([IV]+|[iv]+))?$").unwrap();
         let caps = re.captures(s).ok_or(ChordParseError::InvalidChord(s.to_string()))?;
         let adj = caps.get(1).and_then(|m| Some(m.as_str()));
         let numeral = caps.get(2)
@@ -270,6 +274,8 @@ impl FromStr for ChordSpec {
                     Ok(Triad::Sus2)
                 } else if triad == "^" {
                     Ok(Triad::Sus4)
+                } else if triad == "5" {
+                    Ok(Triad::Power)
                 } else {
                     Err(ChordParseError::InvalidTriadSymbol(triad.to_string()))
                 }
@@ -345,6 +351,7 @@ impl fmt::Display for ChordSpec {
             Triad::Augmented => name.push('+'),
             Triad::Sus2 => name.push('_'),
             Triad::Sus4 => name.push('^'),
+            Triad::Power => name.push('5'),
             Triad::Mode => {}
         }
 
@@ -455,6 +462,9 @@ mod test {
         let spec = ChordSpec::new(3, Mode::Minor).triad(Triad::Diminished)
             .add(7, 0).add(9, 0).bass(5, 0).key_of(2, Mode::Minor);
         assert_eq!(spec.to_string(), "iii-:7,9%5/ii".to_string());
+
+        let spec = ChordSpec::new(1, Mode::Major).triad(Triad::Power);
+        assert_eq!(spec.to_string(), "I5".to_string());
     }
 
     #[test]
@@ -483,6 +493,8 @@ mod test {
 
             ("I_", vec![0, 2, 7]),            // Sus 2
             ("I^", vec![0, 5, 7]),            // Sus 4
+
+            ("I5", vec![0, 7]),               // Power
         ];
         for (name, expected) in examples {
             println!("Name: {:?}", name);
@@ -640,6 +652,11 @@ mod test {
         let name = "bVII";
         let spec: ChordSpec = name.try_into().unwrap();
         let expected = ChordSpec::new(7, Mode::Major).adj(-1);
+        assert_eq!(spec, expected);
+
+        let name = "I5";
+        let spec: ChordSpec = name.try_into().unwrap();
+        let expected = ChordSpec::new(1, Mode::Major).triad(Triad::Power);
         assert_eq!(spec, expected);
     }
 
