@@ -1,8 +1,8 @@
 mod app;
 mod core;
-mod progression;
-mod audio;
 mod midi;
+mod audio;
+mod progression;
 
 use clap::{Parser, ValueHint};
 use std::{fs::File, path::PathBuf};
@@ -24,7 +24,6 @@ use progression::ProgressionTemplate;
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
 struct Args {
-    /// Root
     #[clap(short, long, default_value = "patterns.yaml", value_hint = ValueHint::FilePath)]
     patterns: PathBuf,
 }

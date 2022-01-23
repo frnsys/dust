@@ -83,7 +83,7 @@ pub fn process_input(app: &mut App, key: KeyCode) -> Result<()> {
         }
         KeyCode::Char('j') => {
             let (_, y) = app.selected_tick;
-            app.selected_tick.1 = if y >= app.progression.bars - 1{
+            app.selected_tick.1 = if y >= app.progression.bars - 1 {
                 0
             } else {
                 y + 1

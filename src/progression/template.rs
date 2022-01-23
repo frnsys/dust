@@ -1,126 +1,11 @@
 use rand::seq::SliceRandom;
-use serde::{Deserialize, Deserializer};
-use crate::core::{Key, Mode, ChordSpec, Chord};
 use std::collections::HashMap;
+use serde::{Deserialize, Deserializer};
+use crate::core::{Mode, ChordSpec};
+use super::Progression;
 
-const BEATS_PER_BAR: usize = 4; // Assume 4/4 time
+pub const BEATS_PER_BAR: usize = 4; // Assume 4/4 time
 const TIMING_FACTORS: [f64; 8] = [1., 2., 3., 4., 5., 6., 7., 8.];
-
-pub struct Progression {
-    pub bars: usize,
-    pub time_unit: f64,
-
-    // Progression sequence, one element
-    // per tick. "None"s are rests.
-    pub sequence: Vec<Option<ChordSpec>>,
-
-    // Mapping of chords to their position
-    // in the sequence,
-    // e.g. chord_index[0] gives the position
-    // of the first chord in the sequence,
-    // so self.sequence[self.chord_index][0].unwrap()
-    // will return the chord itself.
-    chord_index: Vec<usize>,
-}
-
-/// Convert a timed progression to a sequence
-fn timed_to_sequence(bars: usize, time_unit: f64, sequence: &Vec<(ChordSpec, f64)>) -> Vec<Option<ChordSpec>> {
-    let mut seq = vec![];
-    let mut last_beat = 0.;
-    for (i, (cs, elapsed)) in sequence.iter().enumerate() {
-        let beat = last_beat + elapsed;
-        let n_rests = if i == 0 {
-            (beat/time_unit) as usize
-        } else {
-            ((beat - last_beat)/time_unit) as usize - 1
-        };
-        for _ in 0..n_rests {
-            seq.push(None);
-        }
-        last_beat = beat;
-        seq.push(Some(cs.clone()));
-
-        // Fill out to end if necessary
-        if i == sequence.len() - 1 {
-            let total_beats = (bars * BEATS_PER_BAR) as f64;
-            let n_rests = ((total_beats - beat)/time_unit) as usize - 1;
-            for _ in 0..n_rests {
-                seq.push(None);
-            }
-        }
-    }
-    seq
-}
-
-fn index_chords(seq: &Vec<Option<ChordSpec>>) -> Vec<usize> {
-    seq.iter().enumerate()
-        .filter_map(|(i, cs)| cs.as_ref().and(Some(i)))
-        .collect()
-}
-
-impl Progression {
-    pub fn new(sequence: Vec<Option<ChordSpec>>, bars: usize, time_unit: f64) -> Progression {
-        Progression {
-            bars,
-            time_unit,
-            chord_index: index_chords(&sequence),
-            sequence,
-        }
-    }
-
-    pub fn in_key(&self, key: &Key) -> Vec<Option<Chord>> {
-        self.sequence.iter()
-            .map(|cs| cs.as_ref().and_then(|c| Some(c.chord_for_key(key))))
-            .collect()
-    }
-
-    pub fn chord(&self, chord_idx: usize) -> Option<&ChordSpec> {
-        let seq_idx = self.chord_index[chord_idx];
-        self.sequence[seq_idx].as_ref()
-    }
-
-    pub fn chords(&self) -> Vec<&ChordSpec> {
-        self.chord_index.iter()
-            .filter_map(|c_idx| self.sequence[*c_idx].as_ref())
-            .collect()
-    }
-
-    pub fn set_chord(&mut self, chord_idx: usize, chord: ChordSpec) {
-        let seq_idx = self.chord_index[chord_idx];
-        self.sequence[seq_idx] = Some(chord);
-    }
-
-    pub fn prev_chord(&self, chord_idx: usize) -> &ChordSpec {
-        let idx = chord_idx as isize - 1;
-        let idx = idx.rem_euclid(self.chord_index.len() as isize) as usize;
-        let seq_idx = self.chord_index[idx];
-        &self.sequence[seq_idx].as_ref().unwrap()
-    }
-
-    pub fn delete_chord_at(&mut self, seq_idx: usize) {
-        self.sequence[seq_idx] = None;
-        self.chord_index = index_chords(&self.sequence);
-    }
-
-    pub fn insert_chord_at(&mut self, seq_idx: usize, chord: ChordSpec) {
-        self.sequence[seq_idx] = Some(chord);
-        self.chord_index = index_chords(&self.sequence);
-    }
-
-    pub fn seq_idx_to_chord_idx(&self, seq_idx: usize) -> usize {
-        // Bleh kind of hacky
-        let mut chord_idx = 0;
-        for (i, tick) in self.sequence.iter().enumerate() {
-            if i == seq_idx {
-                break;
-            }
-            if tick.is_some() {
-                chord_idx += 1;
-            }
-        }
-        chord_idx
-    }
-}
 
 #[derive(Deserialize, PartialEq, Clone, Debug)]
 pub struct ModeTemplate {
@@ -206,7 +91,7 @@ impl ProgressionTemplate {
     }
 
     /// The base timing unit, in beats.
-    fn time_unit(&self) -> f64 {
+    pub fn time_unit(&self) -> f64 {
         // This is expressed in terms of beats, rather than bars,
         // so an eighth note converts to a half of a beat
         BEATS_PER_BAR as f64/self.resolution as f64
@@ -275,6 +160,34 @@ impl ProgressionTemplate {
     }
 }
 
+/// Convert a timed progression to a sequence
+fn timed_to_sequence(bars: usize, time_unit: f64, sequence: &Vec<(ChordSpec, f64)>) -> Vec<Option<ChordSpec>> {
+    let mut seq = vec![];
+    let mut last_beat = 0.;
+    for (i, (cs, elapsed)) in sequence.iter().enumerate() {
+        let beat = last_beat + elapsed;
+        let n_rests = if i == 0 {
+            (beat/time_unit) as usize
+        } else {
+            ((beat - last_beat)/time_unit) as usize - 1
+        };
+        for _ in 0..n_rests {
+            seq.push(None);
+        }
+        last_beat = beat;
+        seq.push(Some(cs.clone()));
+
+        // Fill out to end if necessary
+        if i == sequence.len() - 1 {
+            let total_beats = (bars * BEATS_PER_BAR) as f64;
+            let n_rests = ((total_beats - beat)/time_unit) as usize - 1;
+            for _ in 0..n_rests {
+                seq.push(None);
+            }
+        }
+    }
+    seq
+}
 
 #[cfg(test)]
 mod test {
