@@ -60,9 +60,7 @@ pub fn render<'a>(app: &App) -> Paragraph<'a> {
 }
 
 pub fn process_input(app: &mut App, key: KeyCode) -> Result<()> {
-    let (j, i) = app.selected_tick;
-    let selected_idx = i*app.template.resolution + j;
-    let selected_tick_item = &app.progression.sequence[selected_idx];
+    let (sel_idx, sel_item) = app.selected();
 
     match key {
         KeyCode::Char('l') => {
@@ -98,31 +96,31 @@ pub fn process_input(app: &mut App, key: KeyCode) -> Result<()> {
             };
         }
         KeyCode::Char('d') => {
-            match selected_tick_item {
+            match sel_item {
                 None => {},
                 Some(_) => {
-                    app.progression.delete_chord_at(selected_idx);
+                    app.progression.delete_chord_at(sel_idx);
                     app.update_progression()?;
                 }
             }
         }
         KeyCode::Char('a') => {
-            match selected_tick_item {
+            match sel_item {
                 Some(_) => {},
                 None => {
-                    let chord_idx = app.progression.seq_idx_to_chord_idx(selected_idx);
+                    let chord_idx = app.progression.seq_idx_to_chord_idx(sel_idx);
                     let prev_chord = app.progression.prev_chord(chord_idx);
                     let cands = app.template.next(prev_chord, &app.key.mode);
-                    app.progression.insert_chord_at(selected_idx, cands[0].clone());
+                    app.progression.insert_chord_at(sel_idx, cands[0].clone());
                     app.update_progression()?;
                 }
             }
         }
         KeyCode::Char('e') => {
-            match selected_tick_item {
+            match sel_item {
                 Some(_) => {
                     app.input_mode = InputMode::Chord;
-                    let chord_idx = app.progression.seq_idx_to_chord_idx(selected_idx);
+                    let chord_idx = app.progression.seq_idx_to_chord_idx(sel_idx);
                     app.input_target = InputTarget::Chord(chord_idx);
                 },
                 None => {
@@ -138,11 +136,9 @@ pub fn process_input(app: &mut App, key: KeyCode) -> Result<()> {
 }
 
 pub fn status<'a>(app: &App) -> Vec<Span<'a>> {
-    let (j, i) = app.selected_tick;
-    let selected_idx = i*app.template.resolution + j;
-    let selected_tick_item = &app.progression.sequence[selected_idx];
+    let (_, sel_item) = app.selected();
 
-    let span = match selected_tick_item {
+    let span = match sel_item {
         Some(_) => Span::raw("[d]elete [e]dit"),
         None => Span::raw("[a]dd"),
     };

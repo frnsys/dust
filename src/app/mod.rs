@@ -7,7 +7,7 @@ use anyhow::Result;
 use std::fmt;
 use std::time::{Duration, Instant};
 use crate::midi::MIDI;
-use crate::core::{Note, Key, Mode};
+use crate::core::{Note, Key, Mode, ChordSpec};
 use crate::audio::{Audio, Event as AudioEvent};
 use crate::progression::{Progression, ProgressionTemplate};
 use tui::{
@@ -26,7 +26,7 @@ const TICK_RATE: Duration = Duration::from_millis(200);
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 enum InputMode {
     Normal,
-    Editing,
+    Text,
     Select,
     Chord,
     Sequence,
@@ -37,6 +37,7 @@ enum InputTarget {
     Tempo,
     Bars,
     MidiPort,
+    Seed,
     Chord(usize),
     Sequence,
 }
@@ -142,6 +143,18 @@ impl<'a> App<'a> {
         self.update_progression()?;
         Ok(())
     }
+
+    fn gen_progression_from_seed(&mut self, chord: &ChordSpec) -> Result<()> {
+        self.progression = self.template.gen_progression_from_seed(chord, self.bars, &self.key.mode);
+        self.update_progression()?;
+        Ok(())
+    }
+
+    pub fn selected(&self) -> (usize, &Option<ChordSpec>) {
+        let (j, i) = self.selected_tick;
+        let idx = i*self.template.resolution + j;
+        (idx, &self.progression.sequence[idx])
+    }
 }
 
 pub fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> Result<()> {
@@ -222,7 +235,7 @@ pub fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> Result<(
                 );
 
             let messages = match app.input_mode {
-                InputMode::Editing => text_input::render(&app),
+                InputMode::Text => text_input::render(&app),
                 _ => {
                     Paragraph::new(app.message)
                         .style(Style::default())
@@ -258,7 +271,7 @@ pub fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> Result<(
                         },
                         _ => process_input(&mut app, key.code)?
                     },
-                    InputMode::Editing => text_input::process_input(&mut app, key.code)?,
+                    InputMode::Text => text_input::process_input(&mut app, key.code)?,
                     InputMode::Select => select::process_input(&mut app, key.code)?,
                     InputMode::Chord => progression::process_input(&mut app, key.code)?,
                     InputMode::Sequence => sequencer::process_input(&mut app, key.code)?
@@ -304,7 +317,7 @@ pub fn status<'a>(app: &App) -> Vec<Span<'a>> {
         " [p]ause"
     }));
     status.push(
-        Span::raw(" [s]equence [R]oll [q]uit"));
+        Span::raw(" [M]etrn [s]equence [R]oll [S]eed [q]uit"));
     status
 }
 
@@ -312,17 +325,17 @@ pub fn process_input(app: &mut App, key: KeyCode) -> Result<()> {
     match key {
         KeyCode::Char('t') => {
             app.input.clear();
-            app.input_mode = InputMode::Editing;
+            app.input_mode = InputMode::Text;
             app.input_target = InputTarget::Tempo;
         }
         KeyCode::Char('b') => {
             app.input.clear();
-            app.input_mode = InputMode::Editing;
+            app.input_mode = InputMode::Text;
             app.input_target = InputTarget::Bars;
         }
         KeyCode::Char('r') => {
             app.input.clear();
-            app.input_mode = InputMode::Editing;
+            app.input_mode = InputMode::Text;
             app.input_target = InputTarget::Root;
         }
         KeyCode::Char('m') => {
@@ -367,9 +380,17 @@ pub fn process_input(app: &mut App, key: KeyCode) -> Result<()> {
         KeyCode::Char('R') => {
             app.gen_progression()?;
         }
+        KeyCode::Char('S') => {
+            app.input_mode = InputMode::Text;
+            app.input_target = InputTarget::Seed;
+            app.input.clear();
+        }
         KeyCode::Char('s') => {
             app.input_mode = InputMode::Sequence;
             app.input_target = InputTarget::Sequence;
+        }
+        KeyCode::Char('M') => {
+            app.audio.toggle_tick()?;
         }
         KeyCode::Char(c) => {
             if c.is_numeric() {

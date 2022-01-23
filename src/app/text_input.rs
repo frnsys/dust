@@ -16,6 +16,7 @@ pub fn render<'a>(app: &App) -> Paragraph<'a> {
         InputTarget::Tempo => "Tempo: ",
         InputTarget::Bars => "Bars: ",
         InputTarget::Chord(_) => "Chord: ",
+        InputTarget::Seed => "Chord: ",
         _ => ""
     };
     let spans = Spans::from(vec![
@@ -67,6 +68,17 @@ pub fn process_input(app: &mut App, key: KeyCode) -> Result<()> {
                             }
                         }
                     }
+                    InputTarget::Seed => {
+                        let chord_spec: Result<ChordSpec, _> = input.try_into();
+                        match chord_spec {
+                            Ok(cs) => {
+                                app.gen_progression_from_seed(&cs)?;
+                            }
+                            Err(_) => {
+                                app.message = "Invalid chord"
+                            }
+                        }
+                    }
                     _ => {}
                 }
                 app.update_progression()?;
@@ -80,7 +92,7 @@ pub fn process_input(app: &mut App, key: KeyCode) -> Result<()> {
                         app.input.push(c);
                     }
                 }
-                InputTarget::Chord(_) => {
+                InputTarget::Chord(_) | InputTarget::Seed => {
                     app.input.push(c);
                 }
                 _ => {

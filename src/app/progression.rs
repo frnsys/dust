@@ -11,13 +11,23 @@ use super::{App, InputTarget, InputMode};
 
 pub fn render<'a>(app: &App) -> Paragraph<'a> {
     let progression = app.progression.chords();
-    let selected_chord = if app.input_mode == InputMode::Chord {
-        match app.input_target {
-            InputTarget::Chord(i) => Some(i),
-            _ => None
+    let selected_chord = match app.input_mode {
+        InputMode::Chord | InputMode::Sequence => {
+            match app.input_target {
+                InputTarget::Chord(i) => Some(i),
+                InputTarget::Sequence => {
+                    let (seq_idx, seq_item) = app.selected();
+                    if seq_item.is_some() {
+                        let chord_idx = app.progression.seq_idx_to_chord_idx(seq_idx);
+                        Some(chord_idx)
+                    } else {
+                        None
+                    }
+                },
+                _ => None
+            }
         }
-    } else {
-        None
+        _ => None
     };
 
     // The lines that will be rendered.
@@ -95,7 +105,7 @@ pub fn render<'a>(app: &App) -> Paragraph<'a> {
 pub fn process_input(app: &mut App, key: KeyCode) -> Result<()> {
     match key {
         KeyCode::Char('e') => {
-            app.input_mode = InputMode::Editing;
+            app.input_mode = InputMode::Text;
         }
         KeyCode::Char('k') => {
             // Cycle up a chord

@@ -34,10 +34,64 @@ pub struct AudioProgression {
 
     // Sequence for metronome ticks
     tick_sequence: SequenceInstanceHandle<Event>,
+    tick_muted: bool,
 
     // A silent sequence that doesn't emit sounds,
     // for driving MIDI outpuut
     pub event_sequence: SequenceInstanceHandle<Event>,
+}
+
+impl AudioProgression {
+    pub fn mute_tick(&mut self) -> Result<()> {
+        self.tick_sequence.mute()?;
+        self.tick_muted = true;
+        Ok(())
+    }
+
+    pub fn unmute_tick(&mut self) -> Result<()> {
+        self.tick_sequence.unmute()?;
+        self.tick_muted = false;
+        Ok(())
+    }
+
+    pub fn toggle_tick(&mut self) -> Result<()> {
+        if self.tick_muted {
+            self.unmute_tick()?;
+        } else {
+            self.mute_tick()?;
+        }
+        Ok(())
+    }
+
+    pub fn mute(&mut self) -> Result<()> {
+        self.sequence.mute()?;
+        self.tick_sequence.mute()?;
+        Ok(())
+    }
+
+    pub fn unmute(&mut self) -> Result<()> {
+        self.sequence.unmute()?;
+        if !self.tick_muted {
+            self.tick_sequence.unmute()?;
+        }
+        Ok(())
+    }
+
+    pub fn pause(&mut self) -> Result<()> {
+        self.sequence.pause()?;
+        self.event_sequence.pause()?;
+        self.tick_sequence.pause()?;
+        self.metronome.pause()?;
+        Ok(())
+    }
+
+    pub fn resume(&mut self) -> Result<()> {
+        self.sequence.resume()?;
+        self.event_sequence.resume()?;
+        self.tick_sequence.resume()?;
+        self.metronome.start()?;
+        Ok(())
+    }
 }
 
 impl Audio {
@@ -121,6 +175,7 @@ impl Audio {
         metronome.start()?;
         self.progression = Some(AudioProgression {
             metronome,
+            tick_muted: false,
             chords: chord_handles,
             sequence: sequence_handle,
             event_sequence: event_sequence_handle,
@@ -170,14 +225,14 @@ impl Audio {
 
     pub fn mute(&mut self) -> Result<()> {
         if let Some(ref mut prog) = self.progression {
-            prog.sequence.mute()?
+            prog.mute()?;
         }
         Ok(())
     }
 
     pub fn unmute(&mut self) -> Result<()> {
         if let Some(ref mut prog) = self.progression {
-            prog.sequence.unmute()?
+            prog.unmute()?;
         }
         Ok(())
     }
@@ -192,18 +247,21 @@ impl Audio {
 
     pub fn pause(&mut self) -> Result<()> {
         if let Some(ref mut prog) = self.progression {
-            prog.sequence.pause()?;
-            prog.event_sequence.pause()?;
-            prog.metronome.pause()?;
+            prog.pause()?;
         }
         Ok(())
     }
 
     pub fn resume(&mut self) -> Result<()> {
         if let Some(ref mut prog) = self.progression {
-            prog.sequence.resume()?;
-            prog.event_sequence.resume()?;
-            prog.metronome.start()?;
+            prog.resume()?;
+        }
+        Ok(())
+    }
+
+    pub fn toggle_tick(&mut self) -> Result<()> {
+        if let Some(ref mut prog) = self.progression {
+            prog.toggle_tick()?;
         }
         Ok(())
     }

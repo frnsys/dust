@@ -97,7 +97,36 @@ impl ProgressionTemplate {
         BEATS_PER_BAR as f64/self.resolution as f64
     }
 
-    /// Generate a progression of chord specs from this chord spec.
+    /// Generate a progression of chord specs starting with this chord spec.
+    pub fn gen_progression_from_seed(&self, seed: &ChordSpec, bars: usize, mode: &Mode) -> Progression  {
+        let mut rng = rand::thread_rng();
+        let timings = self.gen_timing(bars);
+        let mut last = seed.clone();
+        let template = match mode {
+            Mode::Major => &self.major,
+            Mode::Minor => &self.minor,
+        };
+        let mut progression: Vec<(ChordSpec, f64)> = vec![];
+        for beat in &timings {
+            let next = if progression.len() == 0 {
+                seed.clone()
+            } else {
+                let cands = template.next(&last);
+                let next = cands.choose(&mut rng);
+                if next.is_none() {
+                    break;
+                } else {
+                    next.unwrap().clone()
+                }
+            };
+
+            last = next.clone();
+            progression.push((next, *beat));
+        }
+        Progression::new(timed_to_sequence(bars, self.time_unit(), &progression), bars, self.time_unit())
+    }
+
+    /// Generate a progression of chord specs for a given mode.
     pub fn gen_progression(&self, bars: usize, mode: &Mode) -> Progression  {
         let mut rng = rand::thread_rng();
         let pattern = self.rand_pattern(mode);
