@@ -24,12 +24,12 @@ pub struct Audio {
     sounds: HashMap<String, SoundHandle>,
 
     /// Currently playing progression
-    pub progression: Option<Progression>,
+    pub progression: Option<AudioProgression>,
 }
 
-pub struct Progression {
-    metronome: MetronomeHandle,
-    chords: Vec<ArrangementHandle>,
+pub struct AudioProgression {
+    pub metronome: MetronomeHandle,
+    chords: Vec<Option<ArrangementHandle>>,
     pub sequence: SequenceInstanceHandle<Event>,
 
     // A silent sequence that doesn't emit sounds,
@@ -47,32 +47,55 @@ impl Audio {
         })
     }
 
-    pub fn play_progression(&mut self, tempo: f64, chords: &Vec<(Chord, f64)>) -> Result<()> {
+    pub fn play_progression(&mut self, tempo: f64, time_unit: f64, seq: &Vec<Option<Chord>>) -> Result<()> {
         let tempo = Tempo(tempo);
-        let mut metronome = self.manager.add_metronome(MetronomeSettings::new().tempo(tempo))?;
-        let chord_handles: Vec<ArrangementHandle> = chords.iter()
-            .map(|(chord, _)| self.build_chord(chord)).collect::<Result<Vec<_>, _>>()?;
 
+        // Set the metronome to emit events for each time unit
+        let ticks = vec![time_unit];
+        let mut metronome = self.manager.add_metronome(
+            MetronomeSettings::new().tempo(tempo).interval_events_to_emit(ticks))?;
+
+        let chord_handles: Vec<Option<ArrangementHandle>> = seq.iter()
+            .map(|cs| {
+                match cs {
+                    Some(cs) => Some(self.build_chord(cs).unwrap()),
+                    None => None
+                }
+            }).collect();
+
+        // The sequence that actually emits chord sounds
         let sequence_handle = self.manager.start_sequence::<Event>(
             {
                 let mut sequence = Sequence::new(SequenceSettings::default());
                 sequence.start_loop();
-                for (chord_handle, (_, beat)) in chord_handles.iter().zip(chords) {
-                    sequence.play(chord_handle, InstanceSettings::default());
-                    sequence.wait(Duration::Beats(*beat));
+                for ch in &chord_handles {
+                    match ch {
+                        Some(ch) => {
+                            sequence.play(ch, InstanceSettings::default());
+                        }
+                        _ => {}
+                    }
+                    sequence.wait(Duration::Beats(time_unit));
                 }
                 sequence
             },
             SequenceInstanceSettings::new().metronome(&metronome),
         )?;
 
+        // A separate event sequence so we can continue
+        // sending events while audio is muted (for driving MIDI output)
         let event_sequence_handle = self.manager.start_sequence::<Event>(
             {
                 let mut sequence = Sequence::new(SequenceSettings::default());
                 sequence.start_loop();
-                for (idx, (_, (_, beat))) in chord_handles.iter().zip(chords).enumerate() {
-                    sequence.emit(Event::Chord(idx));
-                    sequence.wait(Duration::Beats(*beat));
+                for (i, ch) in chord_handles.iter().enumerate() {
+                    match ch {
+                        Some(_) => {
+                            sequence.emit(Event::Chord(i));
+                        }
+                        _ => {}
+                    }
+                    sequence.wait(Duration::Beats(time_unit));
                 }
                 sequence
             },
@@ -80,7 +103,7 @@ impl Audio {
         )?;
 
         metronome.start()?;
-        self.progression = Some(Progression {
+        self.progression = Some(AudioProgression {
             metronome,
             chords: chord_handles,
             sequence: sequence_handle,
@@ -116,7 +139,9 @@ impl Audio {
             prog.sequence.stop()?;
             self.manager.remove_metronome(&prog.metronome)?;
             for chord in &prog.chords {
-                self.manager.remove_arrangement(chord)?;
+                if let Some(ch) = chord {
+                    self.manager.remove_arrangement(ch)?;
+                }
             }
         }
         Ok(())
