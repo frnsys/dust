@@ -32,6 +32,9 @@ pub struct AudioProgression {
     chords: Vec<Option<ArrangementHandle>>,
     sequence: SequenceInstanceHandle<Event>,
 
+    // Sequence for metronome ticks
+    tick_sequence: SequenceInstanceHandle<Event>,
+
     // A silent sequence that doesn't emit sounds,
     // for driving MIDI outpuut
     pub event_sequence: SequenceInstanceHandle<Event>,
@@ -82,6 +85,19 @@ impl Audio {
             SequenceInstanceSettings::new().metronome(&metronome),
         )?;
 
+        // The sequence that actually emits metronome tick sounds
+        let metronome_sound = self.load_sound("samples/metronome.wav".to_string()).unwrap();
+        let tick_sequence_handle = self.manager.start_sequence::<Event>(
+            {
+                let mut sequence = Sequence::new(SequenceSettings::default());
+                sequence.start_loop();
+                sequence.play(&metronome_sound, InstanceSettings::default());
+                sequence.wait(Duration::Beats(1.));
+                sequence
+            },
+            SequenceInstanceSettings::new().metronome(&metronome),
+        )?;
+
         // A separate event sequence so we can continue
         // sending events while audio is muted (for driving MIDI output)
         let event_sequence_handle = self.manager.start_sequence::<Event>(
@@ -108,6 +124,7 @@ impl Audio {
             chords: chord_handles,
             sequence: sequence_handle,
             event_sequence: event_sequence_handle,
+            tick_sequence: tick_sequence_handle,
         });
         Ok(())
     }
@@ -126,12 +143,16 @@ impl Audio {
 
     fn note_sound(&mut self, note: &Note) -> Result<SoundHandle> {
         let fname = format!("samples/piano/ogg/Piano.ff.{}.ogg", note.to_string());
-        if !self.sounds.contains_key(&fname) {
-            let sound = self.manager.load_sound(fname.clone(), SoundSettings::default())?;
-            self.sounds.insert(fname.clone(), sound);
+        self.load_sound(fname)
+    }
+
+    fn load_sound(&mut self, path: String) -> Result<SoundHandle> {
+        if !self.sounds.contains_key(&path) {
+            let sound = self.manager.load_sound(path.clone(), SoundSettings::default())?;
+            self.sounds.insert(path.clone(), sound);
         }
         // OK to unwrap because we check the key's existence
-        Ok(self.sounds.get(&fname).unwrap().clone())
+        Ok(self.sounds.get(&path).unwrap().clone())
     }
 
     pub fn stop_progression(&mut self) -> Result<()> {
@@ -173,6 +194,7 @@ impl Audio {
         if let Some(ref mut prog) = self.progression {
             prog.sequence.pause()?;
             prog.event_sequence.pause()?;
+            prog.metronome.pause()?;
         }
         Ok(())
     }
@@ -181,6 +203,7 @@ impl Audio {
         if let Some(ref mut prog) = self.progression {
             prog.sequence.resume()?;
             prog.event_sequence.resume()?;
+            prog.metronome.start()?;
         }
         Ok(())
     }
