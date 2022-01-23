@@ -30,7 +30,7 @@ pub struct Audio {
 pub struct AudioProgression {
     pub metronome: MetronomeHandle,
     chords: Vec<Option<ArrangementHandle>>,
-    pub sequence: SequenceInstanceHandle<Event>,
+    sequence: SequenceInstanceHandle<Event>,
 
     // A silent sequence that doesn't emit sounds,
     // for driving MIDI outpuut

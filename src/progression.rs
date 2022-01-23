@@ -23,22 +23,6 @@ pub struct Progression {
     chord_index: Vec<usize>,
 }
 
-/// Convert a sequence to a timed progression
-fn sequence_to_timed(time_unit: f64, sequence: &Vec<Option<ChordSpec>>) -> Vec<(ChordSpec, f64)> {
-    let mut last_time = 0.;
-    sequence.iter().enumerate().filter_map(|(i, cs)| {
-        match cs {
-            Some(cs) => {
-                let time = time_unit * i as f64;
-                let elapsed = time - last_time;
-                last_time = time;
-                Some((cs.clone(), elapsed))
-            },
-            None => None,
-        }
-    }).collect()
-}
-
 /// Convert a timed progression to a sequence
 fn timed_to_sequence(bars: usize, time_unit: f64, sequence: &Vec<(ChordSpec, f64)>) -> Vec<Option<ChordSpec>> {
     let mut seq = vec![];
@@ -360,46 +344,5 @@ mod test {
         ];
         assert_eq!(sequence.len(), template.resolution * bars);
         assert_eq!(sequence, expected);
-    }
-
-    #[test]
-    fn test_sequence_to_timed() {
-        let bars = 1;
-        let template = ProgressionTemplate {
-            resolution: 8,
-            major: ModeTemplate {
-                patterns: vec![vec![
-                    "I".try_into().unwrap(),
-                    "V".try_into().unwrap(),
-                    "vi".try_into().unwrap(),
-                    "IV".try_into().unwrap(),
-                ]],
-                transitions: HashMap::default()
-            },
-            minor: ModeTemplate {
-                patterns: vec![],
-                transitions: HashMap::default()
-            }
-        };
-        let chord: ChordSpec = "I".try_into().unwrap();
-        // At resolution=8 the smallest unit is 0.5
-        // aka half a beat aka half a quarter note
-        let sequence = vec![
-            None,
-            Some(chord.clone()),
-            None,
-            Some(chord.clone()),
-            None,
-            None,
-            None,
-            Some(chord.clone()),
-        ];
-        let timed = sequence_to_timed(template.time_unit(), &sequence);
-        let expected = vec![
-            (chord.clone(), 0.5), // 0.5
-            (chord.clone(), 1.),  // 1.5
-            (chord.clone(), 2.0), // 3.5
-        ];
-        assert_eq!(timed, expected);
     }
 }
