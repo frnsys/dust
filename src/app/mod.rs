@@ -81,6 +81,7 @@ pub struct App<'a> {
     progression: Progression,
     template: ProgressionTemplate,
     tick: usize,
+    clip: (usize, usize),
 
     // Outputs
     output: Output,
@@ -103,6 +104,7 @@ impl<'a> App<'a> {
             tick: 0,
             chord_idx: 0,
             selected_tick: (0, 0),
+            clip: (0, 0),
             output: Output::Audio,
             audio: Audio::new().unwrap(),
             midi: MIDI::new(),
@@ -127,7 +129,9 @@ impl<'a> App<'a> {
     /// Updates and plays the current progression with the current key and tempo.
     fn update_progression(&mut self) -> Result<()> {
         self.audio.stop_progression()?;
-        self.audio.play_progression(self.tempo as f64, self.progression.time_unit, &self.progression.in_key(&self.key))?;
+
+        let prog = self.progression.in_key(&self.key);
+        self.audio.play_progression(self.tempo as f64, self.progression.time_unit, &prog[self.clip.0..self.clip.1])?;
 
         // Reset tick position
         self.tick = 0;
@@ -146,12 +150,14 @@ impl<'a> App<'a> {
     /// Generates and plays a new random progression.
     fn gen_progression(&mut self) -> Result<()> {
         self.progression = self.template.gen_progression(self.bars, &self.key.mode);
+        self.reset_clip();
         self.update_progression()?;
         Ok(())
     }
 
     fn gen_progression_from_seed(&mut self, chord: &ChordSpec) -> Result<()> {
         self.progression = self.template.gen_progression_from_seed(chord, self.bars, &self.key.mode);
+        self.reset_clip();
         self.update_progression()?;
         Ok(())
     }
@@ -161,14 +167,28 @@ impl<'a> App<'a> {
         let idx = i*self.template.resolution + j;
         (idx, &self.progression.sequence[idx])
     }
+
+    pub fn clip_len(&self) -> usize {
+        self.clip.1 - self.clip.0
+    }
+
+    pub fn clip_start(&self) -> usize {
+        self.clip.0
+    }
+
+    pub fn reset_clip(&mut self) {
+        self.clip = (0, self.progression.sequence.len());
+    }
 }
 
 pub fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> Result<()> {
     let mut last_tick = Instant::now();
     loop {
+        let clip_start = app.clip_start();
+        let clip_len = app.clip_len();
         if let Some(ref mut prog) = app.audio.progression {
             if let Some(_) = prog.metronome.pop_event()? {
-                if app.tick >= app.progression.sequence.len() {
+                if app.tick >= clip_len {
                     app.tick = 0;
                 }
                 app.tick += 1;
@@ -176,11 +196,12 @@ pub fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> Result<(
             if let Some(event) = prog.event_sequence.pop_event()? {
                 match event {
                     AudioEvent::Chord(i) => {
-                        app.chord_idx = app.progression.seq_idx_to_chord_idx(*i);
+                        let i = i + clip_start;
+                        app.chord_idx = app.progression.seq_idx_to_chord_idx(i);
 
                         // Send MIDI data
                         // There might be some timing issues here b/c of the tick rate
-                        if let Some(chord_spec) = &app.progression.sequence[*i] {
+                        if let Some(chord_spec) = &app.progression.sequence[i] {
                             let chord = chord_spec.chord_for_key(&app.key);
                             app.midi.play_chord(&chord, 1);
                         }

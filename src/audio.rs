@@ -104,7 +104,7 @@ impl Audio {
         })
     }
 
-    pub fn play_progression(&mut self, tempo: f64, time_unit: f64, seq: &Vec<Option<Chord>>) -> Result<()> {
+    pub fn play_progression(&mut self, tempo: f64, time_unit: f64, seq: &[Option<Chord>]) -> Result<()> {
         let tempo = Tempo(tempo);
 
         // Set the metronome to emit events for each time unit

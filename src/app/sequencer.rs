@@ -12,7 +12,7 @@ pub fn render<'a>(app: &App) -> Paragraph<'a> {
     let progression = &app.progression.sequence;
     let resolution = app.template.resolution;
     let bars = app.bars;
-    let cur_idx = app.tick - 1;
+    let cur_idx = app.clip_start() + app.tick - 1;
     let selected = match app.input_mode {
         InputMode::Sequence => Some(app.selected_tick),
         _ => None
@@ -38,13 +38,31 @@ pub fn render<'a>(app: &App) -> Paragraph<'a> {
             } else {
                 " ".to_string()
             };
-            let span = if is_selected {
-                Span::styled(tick_char, Style::default().fg(Color::LightBlue))
+            let mut style = Style::default();
+            if is_selected {
+                style = style.fg(Color::LightBlue);
             } else if idx == cur_idx {
-                Span::styled(tick_char, Style::default().fg(Color::Yellow))
-            } else {
-                Span::raw(tick_char)
+                style = style.fg(Color::Yellow);
             };
+
+            // Highlight loop
+            let (a, b) = app.clip;
+            let a_clip = a > 0;
+            let b_clip = b < app.progression.sequence.len();
+            let b = b - 1;
+            if a_clip && a == idx {
+                style = style.bg(Color::DarkGray);
+            }
+            if b_clip && b == idx {
+                style = style.bg(Color::DarkGray);
+            }
+            if a_clip && b_clip {
+                if a <= idx && idx <= b {
+                    style = style.bg(Color::DarkGray);
+                }
+            }
+
+            let span = Span::styled(tick_char, style);
             bars.push(span);
         }
         bars.push(Span::raw("|"));
@@ -63,6 +81,23 @@ pub fn process_input(app: &mut App, key: KeyCode) -> Result<()> {
     let (sel_idx, sel_item) = app.selected();
 
     match key {
+        KeyCode::Char('A') => {
+            if app.clip.0 != sel_idx {
+                app.clip.0 = sel_idx;
+                app.update_progression()?;
+            }
+        }
+        KeyCode::Char('B') => {
+            let idx = sel_idx + 1;
+            if app.clip.1 != idx {
+                app.clip.1 = idx;
+                app.update_progression()?;
+            }
+        }
+        KeyCode::Char('C') => {
+            app.reset_clip();
+            app.update_progression()?;
+        }
         KeyCode::Char('l') => {
             let (x, _) = app.selected_tick;
             app.selected_tick.0 = if x >= app.template.resolution - 1 {
@@ -129,6 +164,10 @@ pub fn process_input(app: &mut App, key: KeyCode) -> Result<()> {
         }
         KeyCode::Esc | KeyCode::Char('q') => {
             app.input_mode = InputMode::Normal;
+
+            // Only loop in sequence mode
+            app.reset_clip();
+            app.update_progression()?;
         }
         _ => {}
     }
@@ -144,6 +183,6 @@ pub fn status<'a>(app: &App) -> Vec<Span<'a>> {
     };
     vec![
         span,
-        Span::raw(" [q]:back"),
+        Span::raw(" loop:[A]-[B] [C]lear [q]:back"),
     ]
 }
