@@ -40,6 +40,7 @@ enum InputTarget {
     Seed,
     Chord(usize),
     Sequence,
+    Export,
 }
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
@@ -65,6 +66,7 @@ pub struct App<'a> {
     input_target: InputTarget,
     selected_tick: (usize, usize),
     choices: Vec<String>,
+    save_dir: String,
 
     /// Last status message
     message: &'a str,
@@ -87,7 +89,7 @@ pub struct App<'a> {
 }
 
 impl<'a> App<'a> {
-    pub fn new(template: ProgressionTemplate) -> App<'a> {
+    pub fn new(template: ProgressionTemplate, save_dir: String) -> App<'a> {
         let bars = 4;
         let key = Key {
             mode: Mode::Major,
@@ -110,6 +112,7 @@ impl<'a> App<'a> {
             input_target: InputTarget::Tempo,
             choices: vec![],
             message: "",
+            save_dir,
 
             bars,
             key,
@@ -125,7 +128,10 @@ impl<'a> App<'a> {
     fn update_progression(&mut self) -> Result<()> {
         self.audio.stop_progression()?;
         self.audio.play_progression(self.tempo as f64, self.progression.time_unit, &self.progression.in_key(&self.key))?;
+
+        // Reset tick position
         self.tick = 0;
+
         // If output is MIDI, mute the audio.
         // We don't pause it because its events
         // drive the MIDI output.
@@ -317,7 +323,7 @@ pub fn status<'a>(app: &App) -> Vec<Span<'a>> {
         " [p]ause"
     }));
     status.push(
-        Span::raw(" [M]etrn [s]equence [R]oll [S]eed [q]uit"));
+        Span::raw(" [M]etrn [s]equence [R]oll [S]eed [E]xport [q]uit"));
     status
 }
 
@@ -353,6 +359,10 @@ pub fn process_input(app: &mut App, key: KeyCode) -> Result<()> {
                 app.audio.pause()?;
             }
         }
+        KeyCode::Char('s') => {
+            app.input_mode = InputMode::Sequence;
+            app.input_target = InputTarget::Sequence;
+        }
         KeyCode::Char('O') => {
             match app.output {
                 Output::Audio => {
@@ -385,12 +395,13 @@ pub fn process_input(app: &mut App, key: KeyCode) -> Result<()> {
             app.input_target = InputTarget::Seed;
             app.input.clear();
         }
-        KeyCode::Char('s') => {
-            app.input_mode = InputMode::Sequence;
-            app.input_target = InputTarget::Sequence;
-        }
         KeyCode::Char('M') => {
             app.audio.toggle_tick()?;
+        }
+        KeyCode::Char('E') => {
+            app.input_mode = InputMode::Text;
+            app.input_target = InputTarget::Export;
+            app.input = app.save_dir.to_string();
         }
         KeyCode::Char(c) => {
             if c.is_numeric() {

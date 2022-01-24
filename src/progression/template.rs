@@ -91,10 +91,21 @@ impl ProgressionTemplate {
     }
 
     /// The base timing unit, in beats.
+    /// E.g. if the resolution is 8 (eighth notes),
+    /// i.e. 8 ticks per bar, and we assume 4/4 time,
+    /// then our smallest unit of time is 0.5 beats.
     pub fn time_unit(&self) -> f64 {
         // This is expressed in terms of beats, rather than bars,
         // so an eighth note converts to a half of a beat
         BEATS_PER_BAR as f64/self.resolution as f64
+    }
+
+    /// Ticks per beat
+    /// E.g. if the resolution is 8 (eighth notes),
+    /// i.e. 8 ticks per bar, and we assume 4/4 time,
+    /// then we have 2 ticks per beat.
+    pub fn ticks_per_beat(&self) -> usize {
+        self.resolution/BEATS_PER_BAR
     }
 
     /// Generate a progression of chord specs starting with this chord spec.

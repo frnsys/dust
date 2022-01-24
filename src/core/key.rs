@@ -54,3 +54,48 @@ impl Key {
         self.root + self.interval(degree)
     }
 }
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_interval_major() {
+        let key = Key {
+            root: "C3".try_into().unwrap(),
+            mode: Mode::Major
+        };
+
+        let interval = key.interval(1);
+        assert_eq!(interval, Interval { semitones: 0 });
+
+        let interval = key.interval(2);
+        assert_eq!(interval, Interval { semitones: 2 });
+
+        let interval = key.interval(8);
+        assert_eq!(interval, Interval { semitones: 0 });
+
+        let interval = key.interval(9);
+        assert_eq!(interval, Interval { semitones: 2 });
+    }
+
+    #[test]
+    fn test_interval_minor() {
+        let key = Key {
+            root: "C3".try_into().unwrap(),
+            mode: Mode::Minor
+        };
+
+        let interval = key.interval(1);
+        assert_eq!(interval, Interval { semitones: 0 });
+
+        let interval = key.interval(2);
+        assert_eq!(interval, Interval { semitones: 1 });
+
+        let interval = key.interval(8);
+        assert_eq!(interval, Interval { semitones: 0 });
+
+        let interval = key.interval(9);
+        assert_eq!(interval, Interval { semitones: 1 });
+    }
+}

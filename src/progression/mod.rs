@@ -1,7 +1,7 @@
 mod template;
 
 use crate::core::{Key, ChordSpec, Chord};
-pub use template::{ProgressionTemplate, ModeTemplate, BEATS_PER_BAR};
+pub use template::{ProgressionTemplate, ModeTemplate};
 
 pub struct Progression {
     pub bars: usize,

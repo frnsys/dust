@@ -6,6 +6,7 @@ use tui::{
     widgets::{Block, Paragraph},
 };
 use crate::core::ChordSpec;
+use crate::file::save_to_midi_file;
 use crossterm::event::KeyCode;
 use super::{App, InputTarget, InputMode};
 
@@ -17,6 +18,7 @@ pub fn render<'a>(app: &App) -> Paragraph<'a> {
         InputTarget::Bars => "Bars: ",
         InputTarget::Chord(_) => "Chord: ",
         InputTarget::Seed => "Chord: ",
+        InputTarget::Export => "Path: ",
         _ => ""
     };
     let spans = Spans::from(vec![
@@ -64,7 +66,7 @@ pub fn process_input(app: &mut App, key: KeyCode) -> Result<()> {
                                 app.progression.set_chord(i, cs);
                             }
                             Err(_) => {
-                                app.message = "Invalid chord"
+                                app.message = "Invalid chord";
                             }
                         }
                     }
@@ -75,7 +77,22 @@ pub fn process_input(app: &mut App, key: KeyCode) -> Result<()> {
                                 app.gen_progression_from_seed(&cs)?;
                             }
                             Err(_) => {
-                                app.message = "Invalid chord"
+                                app.message = "Invalid chord";
+                            }
+                        }
+                    }
+                    InputTarget::Export => {
+                        let result = save_to_midi_file(
+                            app.tempo,
+                            app.template.ticks_per_beat(),
+                            &app.progression.in_key(&app.key),
+                            input);
+                        match result {
+                            Ok(_) => {
+                                app.message = "Saved file";
+                            },
+                            Err(_) => {
+                                app.message = "Failed to save";
                             }
                         }
                     }
@@ -92,7 +109,7 @@ pub fn process_input(app: &mut App, key: KeyCode) -> Result<()> {
                         app.input.push(c);
                     }
                 }
-                InputTarget::Chord(_) | InputTarget::Seed => {
+                InputTarget::Chord(_) | InputTarget::Seed | InputTarget::Export => {
                     app.input.push(c);
                 }
                 _ => {
