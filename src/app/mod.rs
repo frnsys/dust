@@ -231,8 +231,11 @@ pub fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> Result<(
                     // Config chunk
                     Constraint::Length(1),
 
+                    // To vertically center the next chunk
+                    Constraint::Length(size.height/2 - 5),
+
                     // Progression/Sequence chunk
-                    Constraint::Min(10),
+                    Constraint::Min(6),
 
                     // Messages chunk
                     Constraint::Length(1),
@@ -252,7 +255,7 @@ pub fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> Result<(
                         // Sequence chunk
                         Constraint::Ratio(1, 2),
                     ].as_ref())
-                .split(main_chunks[1]);
+                .split(main_chunks[2]);
 
             let config = Paragraph::new(Spans::from(config_controls(&app)))
                 .style(Style::default())
@@ -285,8 +288,8 @@ pub fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> Result<(
             };
 
             rect.render_widget(config, main_chunks[0]);
-            rect.render_widget(help, main_chunks[3]);
-            rect.render_widget(messages, main_chunks[2]);
+            rect.render_widget(help, main_chunks[4]);
+            rect.render_widget(messages, main_chunks[3]);
 
             if app.input_mode == InputMode::Select {
                 rect.render_widget(select::render(&app), chunks[1]);

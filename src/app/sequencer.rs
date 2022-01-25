@@ -3,7 +3,7 @@ use tui::{
     layout::Alignment,
     style::{Style, Color},
     text::{Span, Spans},
-    widgets::{Block, Paragraph},
+    widgets::{Block, Paragraph, Borders},
 };
 use crossterm::event::KeyCode;
 use super::App;
@@ -74,6 +74,8 @@ pub fn render<'a>(app: &App) -> Paragraph<'a> {
         .alignment(Alignment::Center)
         .block(
             Block::default()
+                .title("Sequencer")
+                .borders(Borders::TOP)
                 .style(Style::default())
         )
 }

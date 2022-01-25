@@ -3,7 +3,7 @@ use tui::{
     layout::Alignment,
     style::{Style, Color, Modifier},
     text::{Span, Spans},
-    widgets::{Block, Paragraph},
+    widgets::{Block, Paragraph, Borders},
 };
 use crossterm::event::KeyCode;
 use super::{App, InputTarget, InputMode};
@@ -89,6 +89,8 @@ pub fn render<'a>(app: &App) -> Paragraph<'a> {
         .alignment(Alignment::Center)
         .block(
             Block::default()
+                .title("Progression")
+                .borders(Borders::TOP)
                 .style(Style::default())
         )
 }
