@@ -247,7 +247,7 @@ pub enum ChordParseError {
 impl FromStr for ChordSpec {
     type Err = ChordParseError;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let re = Regex::new(r"^([b#])*([IV]+|[iv]+)([+-^_5])?(:([b#]?\d+,?)*)?(%([b#]?\d+))?(/([IV]+|[iv]+))?$").unwrap();
+        let re = Regex::new(r"^([b#])*([IV]+|[iv]+)([+-^_5])?(:([b#]?\d+,?)*)?(/([b#]?\d+))?(~([IV]+|[iv]+))?$").unwrap();
         let caps = re.captures(s).ok_or(ChordParseError::InvalidChord(s.to_string()))?;
         let adj = caps.get(1).and_then(|m| Some(m.as_str()));
         let numeral = caps.get(2)
@@ -375,12 +375,12 @@ impl fmt::Display for ChordSpec {
         }
 
         if let Some(bass_degree) = &self.bass_degree {
-            name.push('%');
+            name.push('/');
             name.push_str(&bass_degree.to_string());
         }
 
         if let Some((degree, mode)) = self.rel_key {
-            name.push('/');
+            name.push('~');
             let numeral = NUMERALS[(degree - 1) % 7];
             if mode == Mode::Minor {
                 name.push_str(&numeral.to_lowercase());
@@ -464,15 +464,15 @@ mod test {
 
         let spec = ChordSpec::new(3, Mode::Minor).triad(Triad::Diminished)
             .add(7, 0).bass(5, 0);
-        assert_eq!(spec.to_string(), "iii-:7%5".to_string());
+        assert_eq!(spec.to_string(), "iii-:7/5".to_string());
 
         let spec = ChordSpec::new(3, Mode::Minor).triad(Triad::Diminished)
             .add(7, 0).bass(5, 0).key_of(2, Mode::Minor);
-        assert_eq!(spec.to_string(), "iii-:7%5/ii".to_string());
+        assert_eq!(spec.to_string(), "iii-:7/5~ii".to_string());
 
         let spec = ChordSpec::new(3, Mode::Minor).triad(Triad::Diminished)
             .add(7, 0).add(9, 0).bass(5, 0).key_of(2, Mode::Minor);
-        assert_eq!(spec.to_string(), "iii-:7,9%5/ii".to_string());
+        assert_eq!(spec.to_string(), "iii-:7,9/5~ii".to_string());
 
         let spec = ChordSpec::new(1, Mode::Major).triad(Triad::Power);
         assert_eq!(spec.to_string(), "I5".to_string());
@@ -579,7 +579,7 @@ mod test {
         };
 
         // Secondary dominant, this is V7/V in conventional notation
-        let spec: ChordSpec = "V:b7/V".try_into().unwrap();
+        let spec: ChordSpec = "V:b7~V".try_into().unwrap();
         let chord = spec.chord_for_key(&key);
         let notes = chord.notes();
         let expected = vec![Note {
@@ -620,7 +620,6 @@ mod test {
         }
     }
 
-
     #[test]
     fn test_parse_chord_spec() {
         let name = "III";
@@ -648,17 +647,17 @@ mod test {
         let expected = ChordSpec::new(3, Mode::Major).triad(Triad::Augmented).add(7, 0).add(9, 0);
         assert_eq!(spec, expected);
 
-        let name = "III+:7,9%3";
+        let name = "III+:7,9/3";
         let spec: ChordSpec = name.try_into().unwrap();
         let expected = ChordSpec::new(3, Mode::Major).triad(Triad::Augmented).add(7, 0).add(9, 0).bass(3, 0);
         assert_eq!(spec, expected);
 
-        let name = "V_:7,9/ii";
+        let name = "V_:7,9~ii";
         let spec: ChordSpec = name.try_into().unwrap();
         let expected = ChordSpec::new(5, Mode::Major).triad(Triad::Sus2).add(7, 0).add(9, 0).key_of(2, Mode::Minor);
         assert_eq!(spec, expected);
 
-        let name = "V^:7,9%5/ii";
+        let name = "V^:7,9/5~ii";
         let spec: ChordSpec = name.try_into().unwrap();
         let expected = ChordSpec::new(5, Mode::Major).triad(Triad::Sus4).add(7, 0).add(9, 0).key_of(2, Mode::Minor).bass(5, 0);
         assert_eq!(spec, expected);
@@ -690,5 +689,33 @@ mod test {
 
         let ext: Extension = "b#7".try_into().unwrap();
         assert_eq!(ext, Extension {degree: 7, adj: 0});
+    }
+
+    #[test]
+    fn test_chord_inversions() {
+        let key = Key {
+            root: "C3".try_into().unwrap(),
+            mode: Mode::Major,
+        };
+
+        let cs: ChordSpec = "I".try_into().unwrap();
+        let chord = cs.chord_for_key(&key);
+        let notes: Vec<String> = chord.notes()
+            .iter().map(|n| n.to_string()).collect();
+        assert_eq!(notes, vec!["C3", "E3", "G3"]);
+
+        // First inversion
+        let cs: ChordSpec = "I/3".try_into().unwrap();
+        let chord = cs.chord_for_key(&key);
+        let notes: Vec<String> = chord.notes()
+            .iter().map(|n| n.to_string()).collect();
+        assert_eq!(notes, vec!["E3", "G3", "C4"]);
+
+        // Second inversion
+        let cs: ChordSpec = "I/5".try_into().unwrap();
+        let chord = cs.chord_for_key(&key);
+        let notes: Vec<String> = chord.notes()
+            .iter().map(|n| n.to_string()).collect();
+        assert_eq!(notes, vec!["G3", "C4", "E4"]);
     }
 }

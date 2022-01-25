@@ -1,6 +1,6 @@
 major:
   patterns:
-    - I:7 ii:7 IV:7 iii:7 vi:7 iii:7%5 iii:7%7 I5 ii5
+    - I:7 ii:7 IV:7 iii:7 vi:7 iii:7/5 iii:7/7 I5 ii5
     - I ii IV
     - vi IV I V
     - I V vi IV
@@ -11,6 +11,7 @@ major:
     - I vi ii V
     - I ii iii IV
     - I bIII IV
+    - vi V IV II
 minor:
   patterns:
     - i v iv V
