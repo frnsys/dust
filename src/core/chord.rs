@@ -253,13 +253,12 @@ pub enum ChordParseError {
 impl FromStr for ChordSpec {
     type Err = ChordParseError;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let re = Regex::new(r"^([b#])*([IV]+|[iv]+)([+-^_5])?(:([b#]?\d+,?)*)?(/([b#]?\d+))?(>\d+)?(<\d+)?(~([IV]+|[iv]+))?$").unwrap();
+        let re = Regex::new(r"^([IV]+|[iv]+)([b#])*([+-^_5])?(:([b#]?\d+,?)*)?(/([b#]?\d+))?(>\d+)?(<\d+)?(~([IV]+|[iv]+))?$").unwrap();
         let caps = re.captures(s).ok_or(ChordParseError::InvalidChord(s.to_string()))?;
-        println!("{:?}", caps);
-        let adj = caps.get(1).and_then(|m| Some(m.as_str()));
-        let numeral = caps.get(2)
+        let numeral = caps.get(1)
             .ok_or(ChordParseError::InvalidNumeral("(none)".to_string()))?
             .as_str();
+        let adj = caps.get(2).and_then(|m| Some(m.as_str()));
         let triad = caps.get(3).and_then(|m| Some(m.as_str()));
         let exts = caps.get(4).and_then(|m| Some(m.as_str()));
         let bass_degree = caps.get(6).and_then(|m| Some(m.as_str()));
@@ -361,6 +360,13 @@ impl fmt::Display for ChordSpec {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut name = "".to_string();
 
+        // Convert 1-indexed degree to 0-indexed
+        let mut numeral = NUMERALS[(self.degree - 1) % 7].to_string();
+        if self.mode == Mode::Minor || self.triad == Triad::Diminished {
+            numeral = numeral.to_lowercase();
+        }
+        name.push_str(&numeral);
+
         let count = self.adj.abs() as usize;
         let octaves = count/12;
         let rem = count.rem_euclid(12);
@@ -369,13 +375,6 @@ impl fmt::Display for ChordSpec {
         } else if self.adj > 0 {
             name.push_str(&std::iter::repeat("#").take(rem).collect::<String>());
         }
-
-        // Convert 1-indexed degree to 0-indexed
-        let mut numeral = NUMERALS[(self.degree - 1) % 7].to_string();
-        if self.mode == Mode::Minor || self.triad == Triad::Diminished {
-            numeral = numeral.to_lowercase();
-        }
-        name.push_str(&numeral);
 
         match self.triad {
             Triad::Diminished => name.push('-'),
@@ -506,7 +505,7 @@ mod test {
         assert_eq!(spec.to_string(), "I5".to_string());
 
         let spec = ChordSpec::new(7, Mode::Major).adj(-1);
-        assert_eq!(spec.to_string(), "bVII".to_string());
+        assert_eq!(spec.to_string(), "VIIb".to_string());
 
         let spec = ChordSpec::new(1, Mode::Major).shift(1);
         assert_eq!(spec.to_string(), "I>1".to_string());
@@ -638,7 +637,7 @@ mod test {
             mode: Mode::Major,
         };
 
-        let spec: ChordSpec = "bVII".try_into().unwrap();
+        let spec: ChordSpec = "VIIb".try_into().unwrap();
         let chord = spec.chord_for_key(&key);
         let notes = chord.notes();
         let expected = vec![Note {
@@ -696,7 +695,7 @@ mod test {
         let expected = ChordSpec::new(5, Mode::Major).triad(Triad::Sus4).add(7, 0).add(9, 0).key_of(2, Mode::Minor).bass(5, 0);
         assert_eq!(spec, expected);
 
-        let name = "bVII";
+        let name = "VIIb";
         let spec: ChordSpec = name.try_into().unwrap();
         let expected = ChordSpec::new(7, Mode::Major).adj(-1);
         assert_eq!(spec, expected);
