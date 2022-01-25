@@ -153,6 +153,12 @@ impl ChordSpec {
         self
     }
 
+    /// Shift by a number of octaves
+    pub fn shift(mut self, octaves: isize) -> ChordSpec {
+        self.adj += octaves * 12;
+        self
+    }
+
     pub fn intervals(&self) -> Vec<isize> {
         let offset = match self.rel_key {
             None => 0,
@@ -247,8 +253,9 @@ pub enum ChordParseError {
 impl FromStr for ChordSpec {
     type Err = ChordParseError;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let re = Regex::new(r"^([b#])*([IV]+|[iv]+)([+-^_5])?(:([b#]?\d+,?)*)?(/([b#]?\d+))?(~([IV]+|[iv]+))?$").unwrap();
+        let re = Regex::new(r"^([b#])*([IV]+|[iv]+)([+-^_5])?(:([b#]?\d+,?)*)?(/([b#]?\d+))?(>\d+)?(<\d+)?(~([IV]+|[iv]+))?$").unwrap();
         let caps = re.captures(s).ok_or(ChordParseError::InvalidChord(s.to_string()))?;
+        println!("{:?}", caps);
         let adj = caps.get(1).and_then(|m| Some(m.as_str()));
         let numeral = caps.get(2)
             .ok_or(ChordParseError::InvalidNumeral("(none)".to_string()))?
@@ -256,13 +263,24 @@ impl FromStr for ChordSpec {
         let triad = caps.get(3).and_then(|m| Some(m.as_str()));
         let exts = caps.get(4).and_then(|m| Some(m.as_str()));
         let bass_degree = caps.get(6).and_then(|m| Some(m.as_str()));
-        let rel_key = caps.get(9).and_then(|m| Some(m.as_str()));
+        let shift_up = caps.get(8).and_then(|m| Some(m.as_str()));
+        let shift_down = caps.get(9).and_then(|m| Some(m.as_str()));
+        let rel_key = caps.get(11).and_then(|m| Some(m.as_str()));
 
         let mode = numeral_to_mode(numeral)?;
-        let adj = match adj {
+        let mut adj = match adj {
             Some(adj) => adj.matches('#').count() as isize - adj.matches('b').count() as isize,
             None => 0
         };
+
+        if let Some(shift_up) = shift_up {
+            let octaves = shift_up[1..].parse::<isize>()?;
+            adj += octaves * 12;
+        }
+        if let Some(shift_down) = shift_down {
+            let octaves = shift_down[1..].parse::<isize>()?;
+            adj -= octaves * 12;
+        }
 
         let triad = match triad {
             Some(triad) => {
@@ -344,10 +362,12 @@ impl fmt::Display for ChordSpec {
         let mut name = "".to_string();
 
         let count = self.adj.abs() as usize;
+        let octaves = count/12;
+        let rem = count.rem_euclid(12);
         if self.adj < 0 {
-            name.push_str(&std::iter::repeat("b").take(count).collect::<String>());
+            name.push_str(&std::iter::repeat("b").take(rem).collect::<String>());
         } else if self.adj > 0 {
-            name.push_str(&std::iter::repeat("#").take(count).collect::<String>());
+            name.push_str(&std::iter::repeat("#").take(rem).collect::<String>());
         }
 
         // Convert 1-indexed degree to 0-indexed
@@ -377,6 +397,14 @@ impl fmt::Display for ChordSpec {
         if let Some(bass_degree) = &self.bass_degree {
             name.push('/');
             name.push_str(&bass_degree.to_string());
+        }
+
+        if octaves != 0 {
+            if self.adj < 0 {
+                name.push_str(&format!("<{}", octaves));
+            } else if self.adj > 0 {
+                name.push_str(&format!(">{}", octaves));
+            }
         }
 
         if let Some((degree, mode)) = self.rel_key {
@@ -479,6 +507,12 @@ mod test {
 
         let spec = ChordSpec::new(7, Mode::Major).adj(-1);
         assert_eq!(spec.to_string(), "bVII".to_string());
+
+        let spec = ChordSpec::new(1, Mode::Major).shift(1);
+        assert_eq!(spec.to_string(), "I>1".to_string());
+
+        let spec = ChordSpec::new(1, Mode::Major).shift(-1);
+        assert_eq!(spec.to_string(), "I<1".to_string());
     }
 
     #[test]
@@ -671,6 +705,16 @@ mod test {
         let spec: ChordSpec = name.try_into().unwrap();
         let expected = ChordSpec::new(1, Mode::Major).triad(Triad::Power);
         assert_eq!(spec, expected);
+
+        let name = "I>1";
+        let spec: ChordSpec = name.try_into().unwrap();
+        let expected = ChordSpec::new(1, Mode::Major).shift(1);
+        assert_eq!(spec, expected);
+
+        let name = "I<1";
+        let spec: ChordSpec = name.try_into().unwrap();
+        let expected = ChordSpec::new(1, Mode::Major).shift(-1);
+        assert_eq!(spec, expected);
     }
 
     #[test]
@@ -717,5 +761,51 @@ mod test {
         let notes: Vec<String> = chord.notes()
             .iter().map(|n| n.to_string()).collect();
         assert_eq!(notes, vec!["G3", "C4", "E4"]);
+    }
+
+    #[test]
+    fn test_cluster_chords() {
+        let key = Key {
+            root: "C3".try_into().unwrap(),
+            mode: Mode::Major,
+        };
+
+        let cs: ChordSpec = "I:2".try_into().unwrap();
+        let chord = cs.chord_for_key(&key);
+        let notes: Vec<String> = chord.notes()
+            .iter().map(|n| n.to_string()).collect();
+        assert_eq!(notes, vec!["C3", "D3", "E3", "G3"]);
+    }
+
+    #[test]
+    fn test_chord_octaves() {
+        let key = Key {
+            root: "C3".try_into().unwrap(),
+            mode: Mode::Major,
+        };
+
+        let cs: ChordSpec = "I>1".try_into().unwrap();
+        let chord = cs.chord_for_key(&key);
+        let notes: Vec<String> = chord.notes()
+            .iter().map(|n| n.to_string()).collect();
+        assert_eq!(notes, vec!["C4", "E4", "G4"]);
+
+        let cs: ChordSpec = "I:2>1".try_into().unwrap();
+        let chord = cs.chord_for_key(&key);
+        let notes: Vec<String> = chord.notes()
+            .iter().map(|n| n.to_string()).collect();
+        assert_eq!(notes, vec!["C4", "D4", "E4", "G4"]);
+
+        let cs: ChordSpec = "I<1".try_into().unwrap();
+        let chord = cs.chord_for_key(&key);
+        let notes: Vec<String> = chord.notes()
+            .iter().map(|n| n.to_string()).collect();
+        assert_eq!(notes, vec!["C2", "E2", "G2"]);
+
+        let cs: ChordSpec = "I:2<1".try_into().unwrap();
+        let chord = cs.chord_for_key(&key);
+        let notes: Vec<String> = chord.notes()
+            .iter().map(|n| n.to_string()).collect();
+        assert_eq!(notes, vec!["C2", "D2", "E2", "G2"]);
     }
 }
