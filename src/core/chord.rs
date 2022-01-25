@@ -341,11 +341,22 @@ impl TryFrom<String> for ChordSpec {
 
 impl fmt::Display for ChordSpec {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        // Convert 1-indexed degree to 0-indexed
-        let mut name = NUMERALS[(self.degree - 1) % 7].to_string();
-        if self.mode == Mode::Minor || self.triad == Triad::Diminished {
-            name = name.to_lowercase();
+        let mut name = "".to_string();
+
+        let count = self.adj.abs() as usize;
+        if self.adj < 0 {
+            name.push_str(&std::iter::repeat("b").take(count).collect::<String>());
+        } else if self.adj > 0 {
+            name.push_str(&std::iter::repeat("#").take(count).collect::<String>());
         }
+
+        // Convert 1-indexed degree to 0-indexed
+        let mut numeral = NUMERALS[(self.degree - 1) % 7].to_string();
+        if self.mode == Mode::Minor || self.triad == Triad::Diminished {
+            numeral = numeral.to_lowercase();
+        }
+        name.push_str(&numeral);
+
         match self.triad {
             Triad::Diminished => name.push('-'),
             Triad::Augmented => name.push('+'),
@@ -465,6 +476,9 @@ mod test {
 
         let spec = ChordSpec::new(1, Mode::Major).triad(Triad::Power);
         assert_eq!(spec.to_string(), "I5".to_string());
+
+        let spec = ChordSpec::new(7, Mode::Major).adj(-1);
+        assert_eq!(spec.to_string(), "bVII".to_string());
     }
 
     #[test]
