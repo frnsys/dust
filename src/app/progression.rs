@@ -155,8 +155,13 @@ pub fn process_input(app: &mut App, key: KeyCode) -> Result<()> {
     Ok(())
 }
 
-pub fn controls<'a>(_app: &App) -> Vec<Span<'a>> {
-    vec![
-        Span::raw(" [e]dit [U]p [D]own"),
-    ]
+pub fn controls<'a>(app: &App) -> Vec<Span<'a>> {
+    let (_, seq_item) = app.selected();
+    if seq_item.is_some() {
+        vec![
+            Span::raw(" [e]dit [U]p [D]own"),
+        ]
+    } else {
+        vec![]
+    }
 }

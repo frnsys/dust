@@ -51,13 +51,14 @@ pub fn render<'a>(app: &App) -> Paragraph<'a> {
             let a_clip = a > 0;
             let b_clip = b < app.progression.sequence.len();
             let b = b - 1;
-            if a_clip && a == idx {
+            let is_loop = a_clip || b_clip;
+            if is_loop && a == idx {
                 style = style.bg(Color::DarkGray);
             }
-            if b_clip && b == idx {
+            if is_loop && b == idx {
                 style = style.bg(Color::DarkGray);
             }
-            if a_clip && b_clip {
+            if is_loop {
                 if a <= idx && idx <= b {
                     style = style.bg(Color::DarkGray);
                 }
@@ -86,7 +87,7 @@ pub fn process_input(app: &mut App, key: KeyCode) -> Result<()> {
     match key {
         // Set the start of the loop
         KeyCode::Char('A') => {
-            if app.clip.0 != sel_idx {
+            if app.clip.0 != sel_idx && sel_idx < app.clip.1 {
                 app.clip.0 = sel_idx;
                 app.update_progression()?;
             }
@@ -95,7 +96,7 @@ pub fn process_input(app: &mut App, key: KeyCode) -> Result<()> {
         // Set the end of the loop
         KeyCode::Char('B') => {
             let idx = sel_idx + 1;
-            if app.clip.1 != idx {
+            if app.clip.1 != idx && sel_idx > app.clip.0 {
                 app.clip.1 = idx;
                 app.update_progression()?;
             }
@@ -160,7 +161,12 @@ pub fn process_input(app: &mut App, key: KeyCode) -> Result<()> {
                     let chord_idx = app.progression.seq_idx_to_chord_idx(sel_idx);
                     let prev_chord = app.progression.prev_chord(chord_idx);
                     let cands = app.template.next(prev_chord, &app.key.mode);
-                    app.progression.insert_chord_at(sel_idx, cands[0].clone());
+                    if cands.len() > 0 {
+                        app.progression.insert_chord_at(sel_idx, cands[0].clone());
+                    } else {
+                        let chord = app.template.rand_chord_for_mode(&app.key.mode);
+                        app.progression.insert_chord_at(sel_idx, chord);
+                    }
                     app.update_progression()?;
                 }
             }
