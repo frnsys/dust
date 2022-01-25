@@ -28,8 +28,6 @@ enum InputMode {
     Normal,
     Text,
     Select,
-    Chord,
-    Sequence,
 }
 
 enum InputTarget {
@@ -39,7 +37,6 @@ enum InputTarget {
     MidiPort,
     Seed,
     Chord(usize),
-    Sequence,
     Export,
 }
 
@@ -64,7 +61,7 @@ pub struct App<'a> {
     input: String,
     input_mode: InputMode,
     input_target: InputTarget,
-    selected_tick: (usize, usize),
+    seq_pos: (usize, usize),
     choices: Vec<String>,
     save_dir: String,
 
@@ -77,7 +74,6 @@ pub struct App<'a> {
     key: Key,
 
     // Current chord in the progression
-    chord_idx: usize,
     progression: Progression,
     template: ProgressionTemplate,
     tick: usize,
@@ -102,8 +98,7 @@ impl<'a> App<'a> {
 
         let mut app = App {
             tick: 0,
-            chord_idx: 0,
-            selected_tick: (0, 0),
+            seq_pos: (0, 0),
             clip: (0, 0),
             output: Output::Audio,
             audio: Audio::new().unwrap(),
@@ -163,7 +158,7 @@ impl<'a> App<'a> {
     }
 
     pub fn selected(&self) -> (usize, &Option<ChordSpec>) {
-        let (j, i) = self.selected_tick;
+        let (j, i) = self.seq_pos;
         let idx = i*self.template.resolution + j;
         (idx, &self.progression.sequence[idx])
     }
@@ -197,7 +192,6 @@ pub fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> Result<(
                 match event {
                     AudioEvent::Chord(i) => {
                         let i = i + clip_start;
-                        app.chord_idx = app.progression.seq_idx_to_chord_idx(i);
 
                         // Send MIDI data
                         // There might be some timing issues here b/c of the tick rate
@@ -214,7 +208,6 @@ pub fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> Result<(
             let size = rect.size();
             let chunks = Layout::default()
                 .direction(Direction::Horizontal)
-                .margin(1)
                 .constraints([
                         // Main pane
                         Constraint::Ratio(if app.input_mode == InputMode::Select {
@@ -235,10 +228,10 @@ pub fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> Result<(
             let main_chunks = Layout::default()
                 .direction(Direction::Vertical)
                 .constraints([
-                    // Progression chunk
-                    Constraint::Min(10),
+                    // Config chunk
+                    Constraint::Length(1),
 
-                    // Sequence chunk
+                    // Progression/Sequence chunk
                     Constraint::Min(10),
 
                     // Messages chunk
@@ -249,12 +242,30 @@ pub fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> Result<(
                 ].as_ref())
                 .split(chunks[0]);
 
-            let status = match app.input_mode {
-                InputMode::Chord => progression::status(&app),
-                InputMode::Sequence => sequencer::status(&app),
-                _ => status(&app),
-            };
-            let help = Paragraph::new(Spans::from(status))
+            let display_chunks = Layout::default()
+                .direction(Direction::Horizontal)
+                .margin(2)
+                .constraints([
+                        // Progression chunk
+                        Constraint::Ratio(1, 2),
+
+                        // Sequence chunk
+                        Constraint::Ratio(1, 2),
+                    ].as_ref())
+                .split(main_chunks[1]);
+
+            let config = Paragraph::new(Spans::from(config_controls(&app)))
+                .style(Style::default())
+                .alignment(Alignment::Left)
+                .block(
+                    Block::default()
+                );
+
+            let mut controls = vec![];
+            controls.append(&mut progression::controls(&app));
+            controls.append(&mut sequencer::controls(&app));
+            controls.append(&mut main_controls(&app));
+            let help = Paragraph::new(Spans::from(controls))
                 .style(Style::default())
                 .alignment(Alignment::Left)
                 .block(
@@ -273,6 +284,7 @@ pub fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> Result<(
                 },
             };
 
+            rect.render_widget(config, main_chunks[0]);
             rect.render_widget(help, main_chunks[3]);
             rect.render_widget(messages, main_chunks[2]);
 
@@ -280,8 +292,8 @@ pub fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> Result<(
                 rect.render_widget(select::render(&app), chunks[1]);
             }
 
-            rect.render_widget(progression::render(&app), main_chunks[0]);
-            rect.render_widget(sequencer::render(&app), main_chunks[1]);
+            rect.render_widget(progression::render(&app), display_chunks[0]);
+            rect.render_widget(sequencer::render(&app), display_chunks[1]);
         })?;
 
         let timeout = TICK_RATE
@@ -296,12 +308,14 @@ pub fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> Result<(
                             // Quit
                             return Ok(());
                         },
-                        _ => process_input(&mut app, key.code)?
+                        _ => {
+                            process_input(&mut app, key.code)?;
+                            sequencer::process_input(&mut app, key.code)?;
+                            progression::process_input(&mut app, key.code)?;
+                        }
                     },
                     InputMode::Text => text_input::process_input(&mut app, key.code)?,
                     InputMode::Select => select::process_input(&mut app, key.code)?,
-                    InputMode::Chord => progression::process_input(&mut app, key.code)?,
-                    InputMode::Sequence => sequencer::process_input(&mut app, key.code)?
                 }
             }
             if last_tick.elapsed() >= TICK_RATE {
@@ -311,11 +325,123 @@ pub fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> Result<(
     }
 }
 
+pub fn process_input(app: &mut App, key: KeyCode) -> Result<()> {
+    match key {
+        // Change tempo
+        KeyCode::Char('t') => {
+            app.input.clear();
+            app.input_mode = InputMode::Text;
+            app.input_target = InputTarget::Tempo;
+        }
 
-pub fn status<'a>(app: &App) -> Vec<Span<'a>> {
+        // Change bars
+        KeyCode::Char('b') => {
+            app.input.clear();
+            app.input_mode = InputMode::Text;
+            app.input_target = InputTarget::Bars;
+        }
+
+        // Change root
+        KeyCode::Char('r') => {
+            app.input.clear();
+            app.input_mode = InputMode::Text;
+            app.input_target = InputTarget::Root;
+        }
+
+        // Change mode
+        KeyCode::Char('m') => {
+            app.key.mode = match app.key.mode {
+                Mode::Major => Mode::Minor,
+                Mode::Minor => Mode::Major,
+            };
+            // Mode changes require a new progression
+            app.gen_progression()?;
+        }
+
+        // Pause/resume playback
+        KeyCode::Char('p') => {
+            if app.audio.is_paused() {
+                app.audio.resume()?;
+            } else {
+                app.audio.pause()?;
+            }
+        }
+
+        // Change output
+        KeyCode::Char('O') => {
+            match app.output {
+                Output::Audio => {
+                    app.audio.mute()?;
+                    app.output = Output::Midi;
+                    app.input_mode = InputMode::Select;
+                    app.input_target = InputTarget::MidiPort;
+                    app.choices = app.midi.available_ports().unwrap();
+                    app.input.clear();
+                }
+                Output::Midi => {
+                    app.audio.unmute()?;
+                    app.output = Output::Audio;
+                }
+            }
+        }
+
+        // Change the MIDI output port
+        KeyCode::Char('P') => {
+            if app.output == Output::Midi {
+                app.input_mode = InputMode::Select;
+                app.input_target = InputTarget::MidiPort;
+                app.choices = app.midi.available_ports().unwrap();
+                app.input.clear();
+            }
+        }
+
+        // Generate a new random progression
+        KeyCode::Char('R') => {
+            app.gen_progression()?;
+        }
+
+        // Generate a new progression with
+        // a seed chord
+        KeyCode::Char('S') => {
+            app.input_mode = InputMode::Text;
+            app.input_target = InputTarget::Seed;
+            app.input.clear();
+        }
+
+        // Toggle metronome sound
+        KeyCode::Char('M') => {
+            app.audio.toggle_tick()?;
+        }
+
+        // Start export to MIDI flow
+        KeyCode::Char('E') => {
+            app.input_mode = InputMode::Text;
+            app.input_target = InputTarget::Export;
+            app.input = app.save_dir.to_string();
+        }
+
+        // Select a chord by number
+        KeyCode::Char(c) => {
+            if c.is_numeric() {
+                let idx = c.to_string().parse::<usize>()? - 1;
+                if let Some(_) = app.progression.chord(idx) {
+                    let seq_idx = app.progression.chord_index[idx];
+
+                    let i = seq_idx/app.template.resolution;
+                    let j = seq_idx.rem_euclid(app.template.resolution);
+                    app.seq_pos = (j, i);
+                }
+            }
+        }
+        _ => {}
+    }
+    Ok(())
+}
+
+pub fn config_controls<'a>(app: &App) -> Vec<Span<'a>> {
     let param_style = Style::default().fg(Color::LightBlue)
         .add_modifier(Modifier::BOLD);
-    let mut status = vec![
+    let mut controls = vec![
         Span::raw("[r]oot:"),
         Span::styled(app.key.root.to_string(), param_style),
         Span::raw(" [b]ars:"),
@@ -333,107 +459,22 @@ pub fn status<'a>(app: &App) -> Vec<Span<'a>> {
         } else {
             "none".to_string()
         };
-        status.push(
+        controls.push(
             Span::raw(" [P]ort:"));
-        status.push(
+        controls.push(
             Span::styled(port_name, param_style));
     }
-    status.push(Span::raw(if app.audio.is_paused() {
+    controls
+}
+
+pub fn main_controls<'a>(app: &App) -> Vec<Span<'a>> {
+    let mut controls = vec![];
+    controls.push(Span::raw(if app.audio.is_paused() {
         " [p]lay"
     } else {
         " [p]ause"
     }));
-    status.push(
-        Span::raw(" [M]etrn [s]equence [R]oll [S]eed [E]xport [q]uit"));
-    status
-}
-
-pub fn process_input(app: &mut App, key: KeyCode) -> Result<()> {
-    match key {
-        KeyCode::Char('t') => {
-            app.input.clear();
-            app.input_mode = InputMode::Text;
-            app.input_target = InputTarget::Tempo;
-        }
-        KeyCode::Char('b') => {
-            app.input.clear();
-            app.input_mode = InputMode::Text;
-            app.input_target = InputTarget::Bars;
-        }
-        KeyCode::Char('r') => {
-            app.input.clear();
-            app.input_mode = InputMode::Text;
-            app.input_target = InputTarget::Root;
-        }
-        KeyCode::Char('m') => {
-            app.key.mode = match app.key.mode {
-                Mode::Major => Mode::Minor,
-                Mode::Minor => Mode::Major,
-            };
-            // Mode changes require a new progression
-            app.gen_progression()?;
-        }
-        KeyCode::Char('p') => {
-            if app.audio.is_paused() {
-                app.audio.resume()?;
-            } else {
-                app.audio.pause()?;
-            }
-        }
-        KeyCode::Char('s') => {
-            app.input_mode = InputMode::Sequence;
-            app.input_target = InputTarget::Sequence;
-        }
-        KeyCode::Char('O') => {
-            match app.output {
-                Output::Audio => {
-                    app.audio.mute()?;
-                    app.output = Output::Midi;
-                    app.input_mode = InputMode::Select;
-                    app.input_target = InputTarget::MidiPort;
-                    app.choices = app.midi.available_ports().unwrap();
-                    app.input.clear();
-                }
-                Output::Midi => {
-                    app.audio.unmute()?;
-                    app.output = Output::Audio;
-                }
-            }
-        }
-        KeyCode::Char('P') => {
-            if app.output == Output::Midi {
-                app.input_mode = InputMode::Select;
-                app.input_target = InputTarget::MidiPort;
-                app.choices = app.midi.available_ports().unwrap();
-                app.input.clear();
-            }
-        }
-        KeyCode::Char('R') => {
-            app.gen_progression()?;
-        }
-        KeyCode::Char('S') => {
-            app.input_mode = InputMode::Text;
-            app.input_target = InputTarget::Seed;
-            app.input.clear();
-        }
-        KeyCode::Char('M') => {
-            app.audio.toggle_tick()?;
-        }
-        KeyCode::Char('E') => {
-            app.input_mode = InputMode::Text;
-            app.input_target = InputTarget::Export;
-            app.input = app.save_dir.to_string();
-        }
-        KeyCode::Char(c) => {
-            if c.is_numeric() {
-                let idx = c.to_string().parse::<usize>()? - 1;
-                if let Some(_) = app.progression.chord(idx) {
-                    app.input_mode = InputMode::Chord;
-                    app.input_target = InputTarget::Chord(idx);
-                }
-            }
-        }
-        _ => {}
-    }
-    Ok(())
+    controls.push(
+        Span::raw(" [M]etrn [R]oll [S]eed [E]xport [q]uit"));
+    controls
 }

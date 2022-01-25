@@ -11,24 +11,14 @@ use super::{App, InputTarget, InputMode};
 
 pub fn render<'a>(app: &App) -> Paragraph<'a> {
     let progression = app.progression.chords();
-    let selected_chord = match app.input_mode {
-        InputMode::Chord | InputMode::Sequence => {
-            match app.input_target {
-                InputTarget::Chord(i) => Some(i),
-                InputTarget::Sequence => {
-                    let (seq_idx, seq_item) = app.selected();
-                    if seq_item.is_some() {
-                        let chord_idx = app.progression.seq_idx_to_chord_idx(seq_idx);
-                        Some(chord_idx)
-                    } else {
-                        None
-                    }
-                },
-                _ => None
-            }
-        }
-        _ => None
+    let (seq_idx, seq_item) = app.selected();
+    let selected_chord = if seq_item.is_some() {
+        let chord_idx = app.progression.seq_idx_to_chord_idx(seq_idx);
+        Some(chord_idx)
+    } else {
+        None
     };
+    let cur_idx = app.clip_start() + app.tick - 1;
 
     // The lines that will be rendered.
     let mut lines = vec![];
@@ -68,7 +58,8 @@ pub fn render<'a>(app: &App) -> Paragraph<'a> {
         }
         chord_notes.push(notes);
 
-        let style = if i == app.chord_idx {
+        let chord_idx = app.progression.chord_index[i];
+        let style = if chord_idx == cur_idx {
             Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
         } else {
             Style::default().add_modifier(Modifier::BOLD)
@@ -103,65 +94,58 @@ pub fn render<'a>(app: &App) -> Paragraph<'a> {
 }
 
 pub fn process_input(app: &mut App, key: KeyCode) -> Result<()> {
+    let (seq_idx, seq_item) = app.selected();
+    let selected_chord = if seq_item.is_some() {
+        let chord_idx = app.progression.seq_idx_to_chord_idx(seq_idx);
+        Some(chord_idx)
+    } else {
+        None
+    };
+
     match key {
         KeyCode::Char('e') => {
-            app.input_mode = InputMode::Text;
+            if let Some(chord_idx) = selected_chord {
+                app.input_mode = InputMode::Text;
+                app.input_target = InputTarget::Chord(chord_idx);
+                app.input = app.progression.chord(chord_idx).unwrap().to_string();
+            }
         }
-        KeyCode::Char('k') => {
+        KeyCode::Char('U') => {
             // Cycle up a chord
-            match app.input_target {
-                InputTarget::Chord(i) => {
-                    let prev_chord = app.progression.prev_chord(i);
-                    let cands = app.template.next(prev_chord, &app.key.mode);
-                    let current = app.progression.chord(i).unwrap();
-                    let idx = if let Some(idx) = cands.iter().position(|cs| cs == current) {
-                        if idx == cands.len() - 1 {
-                            0
-                        } else {
-                            idx + 1
-                        }
-                    } else {
+            if let Some(chord_idx) = selected_chord {
+                let prev_chord = app.progression.prev_chord(chord_idx);
+                let cands = app.template.next(prev_chord, &app.key.mode);
+                let current = app.progression.chord(chord_idx).unwrap();
+                let idx = if let Some(idx) = cands.iter().position(|cs| cs == current) {
+                    if idx == cands.len() - 1 {
                         0
-                    };
-                    app.progression.set_chord(i, cands[idx].clone());
-                    app.update_progression()?;
-                }
-                _ => {}
+                    } else {
+                        idx + 1
+                    }
+                } else {
+                    0
+                };
+                app.progression.set_chord(chord_idx, cands[idx].clone());
+                app.update_progression()?;
             }
         }
-        KeyCode::Char('j') => {
+        KeyCode::Char('D') => {
             // Cycle down a chord
-            match app.input_target {
-                InputTarget::Chord(i) => {
-                    let prev_chord = app.progression.prev_chord(i);
-                    let cands = app.template.next(prev_chord, &app.key.mode);
-                    let current = app.progression.chord(i).unwrap();
-                    let idx = if let Some(idx) = cands.iter().position(|cs| cs == current) {
-                        if idx == 0 {
-                            cands.len() - 1
-                        } else {
-                            idx - 1
-                        }
+            if let Some(chord_idx) = selected_chord {
+                let prev_chord = app.progression.prev_chord(chord_idx);
+                let cands = app.template.next(prev_chord, &app.key.mode);
+                let current = app.progression.chord(chord_idx).unwrap();
+                let idx = if let Some(idx) = cands.iter().position(|cs| cs == current) {
+                    if idx == 0 {
+                        cands.len() - 1
                     } else {
-                        0
-                    };
-                    app.progression.set_chord(i, cands[idx].clone());
-                    app.update_progression()?;
-                }
-                _ => {}
-            }
-        }
-        KeyCode::Esc | KeyCode::Char('q') => {
-            app.input_mode = InputMode::Normal;
-        }
-        KeyCode::Char(c) => {
-            if c.is_numeric() {
-                // 1-indexed to 0-indexed
-                let idx = c.to_string().parse::<usize>()? - 1;
-                if let Some(_) = app.progression.chord(idx) {
-                    app.input_mode = InputMode::Chord;
-                    app.input_target = InputTarget::Chord(idx);
-                }
+                        idx - 1
+                    }
+                } else {
+                    0
+                };
+                app.progression.set_chord(chord_idx, cands[idx].clone());
+                app.update_progression()?;
             }
         }
         _ => {}
@@ -169,8 +153,8 @@ pub fn process_input(app: &mut App, key: KeyCode) -> Result<()> {
     Ok(())
 }
 
-pub fn status<'a>(app: &App) -> Vec<Span<'a>> {
+pub fn controls<'a>(_app: &App) -> Vec<Span<'a>> {
     vec![
-        Span::raw("[p]in [e]dit [k]:up [j]:down [q]:back"),
+        Span::raw(" [e]dit [U]p [D]own"),
     ]
 }

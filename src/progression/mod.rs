@@ -17,7 +17,7 @@ pub struct Progression {
     // of the first chord in the sequence,
     // so self.sequence[self.chord_index][0].unwrap()
     // will return the chord itself.
-    chord_index: Vec<usize>,
+    pub chord_index: Vec<usize>,
 }
 
 impl Progression {
@@ -37,8 +37,12 @@ impl Progression {
     }
 
     pub fn chord(&self, chord_idx: usize) -> Option<&ChordSpec> {
-        let seq_idx = self.chord_index[chord_idx];
-        self.sequence[seq_idx].as_ref()
+        if chord_idx < self.chord_index.len() {
+            let seq_idx = self.chord_index[chord_idx];
+            self.sequence[seq_idx].as_ref()
+        } else {
+            None
+        }
     }
 
     pub fn chords(&self) -> Vec<&ChordSpec> {
