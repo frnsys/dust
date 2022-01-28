@@ -6,7 +6,7 @@ use tui::{
     widgets::{Block, Paragraph, Borders},
 };
 use crossterm::event::KeyCode;
-use super::App;
+use super::{App, InputMode, InputTarget};
 
 pub fn render<'a>(app: &App) -> Paragraph<'a> {
     let progression = &app.progression.sequence;
@@ -142,31 +142,35 @@ pub fn process_input(app: &mut App, key: KeyCode) -> Result<()> {
             };
         }
 
+        // Edit or add chord at cursor
+        KeyCode::Char('e') => {
+            if sel_item.is_some() {
+                let chord_idx = app.progression.seq_idx_to_chord_idx(sel_idx);
+                app.input_mode = InputMode::Text;
+                app.input_target = InputTarget::Chord(chord_idx);
+                app.input = app.progression.chord(chord_idx).unwrap().to_string();
+            } else {
+                let chord_idx = app.progression.seq_idx_to_chord_idx(sel_idx);
+                let prev_chord = app.progression.prev_chord(chord_idx);
+                let cands = app.template.next(prev_chord, &app.key.mode);
+                if cands.len() > 0 {
+                    app.progression.insert_chord_at(sel_idx, cands[0].clone());
+                } else {
+                    let chord = app.template.rand_chord_for_mode(&app.key.mode);
+                    app.progression.insert_chord_at(sel_idx, chord);
+                }
+                app.input_mode = InputMode::Text;
+                app.input_target = InputTarget::Chord(chord_idx);
+                app.input = "".to_string();
+            }
+        }
+
         // Delete chord under cursor
         KeyCode::Char('d') => {
             match sel_item {
                 None => {},
                 Some(_) => {
                     app.progression.delete_chord_at(sel_idx);
-                    app.update_progression()?;
-                }
-            }
-        }
-
-        // Add chord under cursor
-        KeyCode::Char('a') => {
-            match sel_item {
-                Some(_) => {},
-                None => {
-                    let chord_idx = app.progression.seq_idx_to_chord_idx(sel_idx);
-                    let prev_chord = app.progression.prev_chord(chord_idx);
-                    let cands = app.template.next(prev_chord, &app.key.mode);
-                    if cands.len() > 0 {
-                        app.progression.insert_chord_at(sel_idx, cands[0].clone());
-                    } else {
-                        let chord = app.template.rand_chord_for_mode(&app.key.mode);
-                        app.progression.insert_chord_at(sel_idx, chord);
-                    }
                     app.update_progression()?;
                 }
             }
@@ -178,13 +182,13 @@ pub fn process_input(app: &mut App, key: KeyCode) -> Result<()> {
 
 pub fn controls<'a>(app: &App) -> Vec<Span<'a>> {
     let (_, sel_item) = app.selected();
+    let mut controls = vec![
+        Span::raw(" [e]dit"),
+    ];
+    if sel_item.is_some() {
+        controls.push(Span::raw(" [d]elete"));
+    }
 
-    let span = match sel_item {
-        Some(_) => Span::raw(" [d]elete"),
-        None => Span::raw(" [a]dd"),
-    };
-    vec![
-        span,
-        Span::raw(" loop:[A]-[B] [C]lear"),
-    ]
+    controls.push(Span::raw(" loop:[A]-[B] [C]lear"));
+    controls
 }

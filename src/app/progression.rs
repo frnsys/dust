@@ -105,13 +105,6 @@ pub fn process_input(app: &mut App, key: KeyCode) -> Result<()> {
     };
 
     match key {
-        KeyCode::Char('e') => {
-            if let Some(chord_idx) = selected_chord {
-                app.input_mode = InputMode::Text;
-                app.input_target = InputTarget::Chord(chord_idx);
-                app.input = app.progression.chord(chord_idx).unwrap().to_string();
-            }
-        }
         KeyCode::Char('U') => {
             // Cycle up a chord
             if let Some(chord_idx) = selected_chord {
@@ -159,7 +152,7 @@ pub fn controls<'a>(app: &App) -> Vec<Span<'a>> {
     let (_, seq_item) = app.selected();
     if seq_item.is_some() {
         vec![
-            Span::raw(" [e]dit [U]p [D]own"),
+            Span::raw(" [U]p [D]own"),
         ]
     } else {
         vec![]

@@ -87,7 +87,7 @@ pub struct App<'a> {
 
 impl<'a> App<'a> {
     pub fn new(template: ProgressionTemplate, save_dir: String) -> App<'a> {
-        let bars = 4;
+        let bars = 2;
         let key = Key {
             mode: Mode::Major,
             root: Note {
