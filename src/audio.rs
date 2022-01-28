@@ -8,7 +8,7 @@ use kira::{
     sequence::{Sequence, SequenceSettings, SequenceInstanceSettings, SequenceInstanceState, handle::SequenceInstanceHandle},
     metronome::{MetronomeSettings, handle::MetronomeHandle},
 };
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use crate::core::{Chord, Note};
 use anyhow::Result;
 
@@ -16,6 +16,8 @@ use anyhow::Result;
 pub enum Event {
 	Chord(usize),
 }
+
+const CHORD_LIMIT: usize = 10;
 
 pub struct Audio {
     manager: AudioManager,
@@ -25,6 +27,10 @@ pub struct Audio {
 
     /// Currently playing progression
     pub progression: Option<AudioProgression>,
+
+    /// Limit amount of simultaneous chords,
+    /// to avoid going over the audio manager arrangement limit
+    chords: VecDeque<ArrangementHandle>
 }
 
 pub struct AudioProgression {
@@ -101,6 +107,7 @@ impl Audio {
             manager,
             progression: None,
             sounds: HashMap::default(),
+            chords: VecDeque::default(),
         })
     }
 
@@ -181,6 +188,21 @@ impl Audio {
             event_sequence: event_sequence_handle,
             tick_sequence: tick_sequence_handle,
         });
+        Ok(())
+    }
+
+    pub fn play_chord(&mut self, chord: &Chord) -> Result<()> {
+        let mut chord = self.build_chord(chord)?;
+        chord.play(InstanceSettings::default())?;
+
+        // Remove old chords if necessary
+        if self.chords.len() >= CHORD_LIMIT {
+            if let Some(ch) = self.chords.pop_front() {
+                self.manager.remove_arrangement(&ch)?;
+            }
+        }
+        self.chords.push_back(chord);
+
         Ok(())
     }
 

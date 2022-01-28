@@ -5,7 +5,7 @@ use super::note::Note;
 use super::interval::Interval;
 use super::key::{Key, Mode, MAJOR, MINOR};
 
-const NUMERALS: [&str; 7] = ["I", "II", "III", "IV", "V", "VI", "VII"];
+pub const NUMERALS: [&str; 7] = ["I", "II", "III", "IV", "V", "VI", "VII"];
 
 fn numeral_to_index(numeral: &str) -> Option<usize> {
     NUMERALS.iter().position(|&n| n == numeral.to_uppercase())
@@ -524,13 +524,6 @@ mod test {
             ("I:7", vec![0, 4, 7, 11]),        // Major 7th, e.g. Cmaj7
             ("I:7,9", vec![0, 4, 7, 11, 14]),  // Major 9th, e.g. Cmaj7/9
 
-            ("i", vec![0, 3, 7]),              // Minor triad, e.g. Cm
-            ("i:#6", vec![0, 3, 7, 9]),        // Minor 6th, e.g. Cm6
-            ("i:7", vec![0, 3, 7, 10]),        // Minor 7th, e.g. Cm7
-            ("i:7,#9", vec![0, 3, 7, 10, 14]), // Minor 9th, e.g. Cm7/9
-            ("i:#7", vec![0, 3, 7, 11]),       // Minor 9th, e.g. Cm7+
-            ("i:#7,#9", vec![0, 3, 7, 11, 14]),// Minor 9th, e.g. Cm7+/9
-
             ("I:b7", vec![0, 4, 7, 10]),       // Dominant 7th, e.g. C7
             ("I:b7,9", vec![0, 4, 7, 10, 14]), // Dominant 9th, e.g. C7/9
 
@@ -541,15 +534,22 @@ mod test {
             ("I+:b7", vec![0, 4, 8, 10]),      // Augmented 7th, e.g. Caug7
             ("I+:9", vec![0, 4, 8, 14]),       // Augmented 9th, e.g. Caug9
 
-            ("i-", vec![0, 3, 6]),             // Diminished triad, e.g. Cdim
-            ("i-:b7", vec![0, 3, 6, 9]),       // Diminished 7th, e.g. Cdim7
-            ("i-:7", vec![0, 3, 6, 10]),       // Half-Diminished 7th, e.g. Cø7 or Cm7b5
-
             ("I_", vec![0, 2, 7]),             // Sus 2, e.g. Csus2
             ("I^", vec![0, 5, 7]),             // Sus 4, e.g. Csus4
             ("I^:b7,9", vec![0, 5, 7, 10, 14]),// 9th Sus 4, e.g. C9sus4
 
             ("I5", vec![0, 7]),                // Power, e.g. C5
+
+            ("i", vec![0, 3, 7]),              // Minor triad, e.g. Cm
+            ("i:#6", vec![0, 3, 7, 9]),        // Minor 6th, e.g. Cm6
+            ("i:7", vec![0, 3, 7, 10]),        // Minor 7th, e.g. Cm7
+            ("i:7,#9", vec![0, 3, 7, 10, 14]), // Minor 9th, e.g. Cm7/9
+            ("i:#7", vec![0, 3, 7, 11]),       // Minor 9th, e.g. Cm7+
+            ("i:#7,#9", vec![0, 3, 7, 11, 14]),// Minor 9th, e.g. Cm7+/9
+
+            ("i-", vec![0, 3, 6]),             // Diminished triad, e.g. Cdim
+            ("i-:b7", vec![0, 3, 6, 9]),       // Diminished 7th, e.g. Cdim7
+            ("i-:7", vec![0, 3, 6, 10]),       // Half-Diminished 7th, e.g. Cø7 or Cm7b5
         ];
         for (name, expected) in examples {
             println!("Name: {:?}", name);

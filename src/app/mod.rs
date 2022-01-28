@@ -2,6 +2,7 @@ mod select;
 mod sequencer;
 mod progression;
 mod text_input;
+mod chord_select;
 
 use anyhow::Result;
 use std::fmt;
@@ -18,6 +19,7 @@ use tui::{
     text::{Span, Spans},
     widgets::{Block, Paragraph},
 };
+use chord_select::ChordSelectState;
 use crossterm::event::{self, Event, KeyCode};
 
 
@@ -64,6 +66,7 @@ pub struct App<'a> {
     seq_pos: (usize, usize),
     choices: Vec<String>,
     save_dir: String,
+    chord_select: ChordSelectState,
 
     /// Last status message
     message: &'a str,
@@ -107,6 +110,7 @@ impl<'a> App<'a> {
             input: String::new(),
             input_mode: InputMode::Normal,
             input_target: InputTarget::Tempo,
+            chord_select: ChordSelectState::default(),
             choices: vec![],
             message: "",
             save_dir,
@@ -292,7 +296,15 @@ pub fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> Result<(
             rect.render_widget(messages, main_chunks[3]);
 
             if app.input_mode == InputMode::Select {
-                rect.render_widget(select::render(&app), chunks[1]);
+                match app.input_target {
+                    InputTarget::Chord(_) => {
+                        let size = (chunks[1].width as usize, chunks[1].height as usize);
+                        rect.render_widget(chord_select::render(&app, size), chunks[1]);
+                    }
+                    _ => {
+                        rect.render_widget(select::render(&app), chunks[1]);
+                    }
+                }
             }
 
             rect.render_widget(progression::render(&app), display_chunks[0]);
@@ -318,7 +330,16 @@ pub fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> Result<(
                         }
                     },
                     InputMode::Text => text_input::process_input(&mut app, key.code)?,
-                    InputMode::Select => select::process_input(&mut app, key.code)?,
+                    InputMode::Select => {
+                        match app.input_target {
+                            InputTarget::Chord(_) => {
+                                chord_select::process_input(&mut app, key.code)?;
+                            }
+                            _ => {
+                                select::process_input(&mut app, key.code)?;
+                            }
+                        }
+                    }
                 }
             }
             if last_tick.elapsed() >= TICK_RATE {
@@ -421,6 +442,17 @@ pub fn process_input(app: &mut App, key: KeyCode) -> Result<()> {
             app.input_mode = InputMode::Text;
             app.input_target = InputTarget::Export;
             app.input = app.save_dir.to_string();
+        }
+
+        // Chord select mode
+        KeyCode::Char('s') => {
+            match app.input_target {
+                InputTarget::Chord(_) => (),
+                _ => {
+                    app.input_target = InputTarget::Chord(0);
+                }
+            }
+            app.input_mode = InputMode::Select;
         }
 
         // Select a chord by number
