@@ -8,6 +8,13 @@ use tui::{
 use crossterm::event::KeyCode;
 use super::{App, InputMode, InputTarget};
 
+fn has_loop(app: &App) -> bool {
+    let (a, b) = app.clip;
+    let a_clip = a > 0;
+    let b_clip = b < app.progression.sequence.len();
+    a_clip || b_clip
+}
+
 pub fn render<'a>(app: &App) -> Paragraph<'a> {
     let progression = &app.progression.sequence;
     let resolution = app.template.resolution;
@@ -48,10 +55,8 @@ pub fn render<'a>(app: &App) -> Paragraph<'a> {
 
             // Highlight loop
             let (a, b) = app.clip;
-            let a_clip = a > 0;
-            let b_clip = b < app.progression.sequence.len();
             let b = b - 1;
-            let is_loop = a_clip || b_clip;
+            let is_loop = has_loop(app);
             if is_loop && a == idx {
                 style = style.bg(Color::DarkGray);
             }
@@ -189,6 +194,10 @@ pub fn controls<'a>(app: &App) -> Vec<Span<'a>> {
         controls.push(Span::raw(" [d]elete"));
     }
 
-    controls.push(Span::raw(" loop:[A]-[B] [C]lear"));
+    controls.push(Span::raw(" loop:[A]-[B]"));
+    if has_loop(app) {
+        controls.push(Span::raw(" [C]lear"));
+    }
+
     controls
 }
