@@ -65,11 +65,15 @@ impl Progression {
 
     pub fn delete_chord_at(&mut self, seq_idx: usize) {
         self.sequence[seq_idx] = None;
-        self.chord_index = index_chords(&self.sequence);
+        self.update_chords();
     }
 
     pub fn insert_chord_at(&mut self, seq_idx: usize, chord: ChordSpec) {
         self.sequence[seq_idx] = Some(chord);
+        self.update_chords();
+    }
+
+    pub fn update_chords(&mut self) {
         self.chord_index = index_chords(&self.sequence);
     }
 

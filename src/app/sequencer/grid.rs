@@ -6,21 +6,14 @@ use tui::{
     widgets::{Block, Paragraph, Borders},
 };
 use crossterm::event::KeyCode;
-use super::{App, InputMode, InputTarget};
+use super::{Sequencer, InputMode, ChordSelect, ChordTarget};
 
-fn has_loop(app: &App) -> bool {
-    let (a, b) = app.clip;
-    let a_clip = a > 0;
-    let b_clip = b < app.progression.sequence.len();
-    a_clip || b_clip
-}
-
-pub fn render<'a>(app: &App) -> Paragraph<'a> {
-    let progression = &app.progression.sequence;
-    let resolution = app.template.resolution;
-    let bars = app.bars;
-    let cur_idx = app.clip_start() + app.tick - 1;
-    let selected = app.seq_pos;
+pub fn render<'a>(seq: &Sequencer) -> Paragraph<'a> {
+    let progression = &seq.progression.sequence;
+    let resolution = seq.template.resolution;
+    let bars = seq.bars;
+    let cur_idx = seq.clip_start() + seq.tick - 1;
+    let selected = seq.seq_pos;
 
     // The lines that will be rendered.
     let mut lines = vec![];
@@ -35,7 +28,7 @@ pub fn render<'a>(app: &App) -> Paragraph<'a> {
 
             // What character is showing under the cursor
             let tick_char = if progression[idx].is_some() {
-                let chord_idx = app.progression.seq_idx_to_chord_idx(idx) + 1;
+                let chord_idx = seq.progression.seq_idx_to_chord_idx(idx) + 1;
                 chord_idx.to_string()
             } else if is_selected {
                 "*".to_string()
@@ -54,9 +47,9 @@ pub fn render<'a>(app: &App) -> Paragraph<'a> {
             };
 
             // Highlight loop
-            let (a, b) = app.clip;
+            let (a, b) = seq.clip;
             let b = b - 1;
-            let is_loop = has_loop(app);
+            let is_loop = seq.has_loop();
             if is_loop && a == idx {
                 style = style.bg(Color::DarkGray);
             }
@@ -86,62 +79,62 @@ pub fn render<'a>(app: &App) -> Paragraph<'a> {
         )
 }
 
-pub fn process_input(app: &mut App, key: KeyCode) -> Result<()> {
-    let (sel_idx, sel_item) = app.selected();
+pub fn process_input(seq: &mut Sequencer, key: KeyCode) -> Result<()> {
+    let (sel_idx, sel_item) = seq.selected();
 
     match key {
         // Set the start of the loop
         KeyCode::Char('A') => {
-            if app.clip.0 != sel_idx && sel_idx < app.clip.1 {
-                app.clip.0 = sel_idx;
-                app.update_progression()?;
+            if seq.clip.0 != sel_idx && sel_idx < seq.clip.1 {
+                seq.clip.0 = sel_idx;
+                seq.restart_events()?;
             }
         }
 
         // Set the end of the loop
         KeyCode::Char('B') => {
             let idx = sel_idx + 1;
-            if app.clip.1 != idx && sel_idx > app.clip.0 {
-                app.clip.1 = idx;
-                app.update_progression()?;
+            if seq.clip.1 != idx && sel_idx > seq.clip.0 {
+                seq.clip.1 = idx;
+                seq.restart_events()?;
             }
         }
 
         // Clear the loop
         KeyCode::Char('C') => {
-            app.reset_clip();
-            app.update_progression()?;
+            seq.reset_clip();
+            seq.restart_events()?;
         }
 
         // hjkl navigation
         KeyCode::Char('l') => {
-            let (x, _) = app.seq_pos;
-            app.seq_pos.0 = if x >= app.template.resolution - 1 {
+            let (x, _) = seq.seq_pos;
+            seq.seq_pos.0 = if x >= seq.template.resolution - 1 {
                 0
             } else {
                 x + 1
             };
         }
         KeyCode::Char('h') => {
-            let (x, _) = app.seq_pos;
-            app.seq_pos.0 = if x == 0 {
-                app.template.resolution - 1
+            let (x, _) = seq.seq_pos;
+            seq.seq_pos.0 = if x == 0 {
+                seq.template.resolution - 1
             } else {
                 x - 1
             };
         }
         KeyCode::Char('j') => {
-            let (_, y) = app.seq_pos;
-            app.seq_pos.1 = if y >= app.progression.bars - 1 {
+            let (_, y) = seq.seq_pos;
+            seq.seq_pos.1 = if y >= seq.progression.bars - 1 {
                 0
             } else {
                 y + 1
             };
         }
         KeyCode::Char('k') => {
-            let (_, y) = app.seq_pos;
-            app.seq_pos.1 = if y == 0 {
-                app.progression.bars - 1
+            let (_, y) = seq.seq_pos;
+            seq.seq_pos.1 = if y == 0 {
+                seq.progression.bars - 1
             } else {
                 y - 1
             };
@@ -149,25 +142,9 @@ pub fn process_input(app: &mut App, key: KeyCode) -> Result<()> {
 
         // Edit or add chord at cursor
         KeyCode::Char('e') => {
-            if sel_item.is_some() {
-                let chord_idx = app.progression.seq_idx_to_chord_idx(sel_idx);
-                app.input_mode = InputMode::Text;
-                app.input_target = InputTarget::Chord(chord_idx);
-                app.input = app.progression.chord(chord_idx).unwrap().to_string();
-            } else {
-                let chord_idx = app.progression.seq_idx_to_chord_idx(sel_idx);
-                let prev_chord = app.progression.prev_chord(chord_idx);
-                let cands = app.template.next(prev_chord, &app.key.mode);
-                if cands.len() > 0 {
-                    app.progression.insert_chord_at(sel_idx, cands[0].clone());
-                } else {
-                    let chord = app.template.rand_chord_for_mode(&app.key.mode);
-                    app.progression.insert_chord_at(sel_idx, chord);
-                }
-                app.input_mode = InputMode::Text;
-                app.input_target = InputTarget::Chord(chord_idx);
-                app.input = "".to_string();
-            }
+            seq.input_mode = InputMode::Chord(
+                ChordSelect::default(),
+                ChordTarget::Chord);
         }
 
         // Delete chord under cursor
@@ -175,8 +152,7 @@ pub fn process_input(app: &mut App, key: KeyCode) -> Result<()> {
             match sel_item {
                 None => {},
                 Some(_) => {
-                    app.progression.delete_chord_at(sel_idx);
-                    app.update_progression()?;
+                    seq.progression.delete_chord_at(sel_idx);
                 }
             }
         }
@@ -185,8 +161,8 @@ pub fn process_input(app: &mut App, key: KeyCode) -> Result<()> {
     Ok(())
 }
 
-pub fn controls<'a>(app: &App) -> Vec<Span<'a>> {
-    let (_, sel_item) = app.selected();
+pub fn controls<'a>(seq: &Sequencer) -> Vec<Span<'a>> {
+    let (_, sel_item) = seq.selected();
     let mut controls = vec![
         Span::raw(" [e]dit"),
     ];
@@ -195,7 +171,7 @@ pub fn controls<'a>(app: &App) -> Vec<Span<'a>> {
     }
 
     controls.push(Span::raw(" loop:[A]-[B]"));
-    if has_loop(app) {
+    if seq.has_loop() {
         controls.push(Span::raw(" [C]lear"));
     }
 

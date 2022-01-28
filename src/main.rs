@@ -2,7 +2,6 @@ mod app;
 mod core;
 mod file;
 mod midi;
-mod audio;
 mod progression;
 
 use clap::{Parser, ValueHint};

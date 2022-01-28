@@ -6,19 +6,18 @@ use tui::{
     widgets::{Block, Paragraph, Borders},
 };
 use crossterm::event::KeyCode;
-use super::{App, InputTarget, InputMode};
+use super::Sequencer;
 
-
-pub fn render<'a>(app: &App) -> Paragraph<'a> {
-    let progression = app.progression.chords();
-    let (seq_idx, seq_item) = app.selected();
+pub fn render<'a>(seq: &Sequencer) -> Paragraph<'a> {
+    let progression = seq.progression.chords();
+    let (seq_idx, seq_item) = seq.selected();
     let selected_chord = if seq_item.is_some() {
-        let chord_idx = app.progression.seq_idx_to_chord_idx(seq_idx);
+        let chord_idx = seq.progression.seq_idx_to_chord_idx(seq_idx);
         Some(chord_idx)
     } else {
         None
     };
-    let cur_idx = app.clip_start() + app.tick - 1;
+    let cur_idx = seq.clip_start() + seq.tick - 1;
 
     // The lines that will be rendered.
     let mut lines = vec![];
@@ -52,13 +51,13 @@ pub fn render<'a>(app: &App) -> Paragraph<'a> {
         let name = format!("{:^5}", cs.to_string());
 
         // For rendering chord notes
-        let notes = cs.chord_for_key(&app.key).describe_notes();
+        let notes = cs.chord_for_key(&seq.key).describe_notes();
         if notes.len() > required_lines {
             required_lines = notes.len();
         }
         chord_notes.push(notes);
 
-        let chord_idx = app.progression.chord_index[i];
+        let chord_idx = seq.progression.chord_index[i];
         let style = if chord_idx == cur_idx {
             Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
         } else {
@@ -95,10 +94,10 @@ pub fn render<'a>(app: &App) -> Paragraph<'a> {
         )
 }
 
-pub fn process_input(app: &mut App, key: KeyCode) -> Result<()> {
-    let (seq_idx, seq_item) = app.selected();
+pub fn process_input(seq: &mut Sequencer, key: KeyCode) -> Result<()> {
+    let (seq_idx, seq_item) = seq.selected();
     let selected_chord = if seq_item.is_some() {
-        let chord_idx = app.progression.seq_idx_to_chord_idx(seq_idx);
+        let chord_idx = seq.progression.seq_idx_to_chord_idx(seq_idx);
         Some(chord_idx)
     } else {
         None
@@ -108,9 +107,9 @@ pub fn process_input(app: &mut App, key: KeyCode) -> Result<()> {
         KeyCode::Char('U') => {
             // Cycle up a chord
             if let Some(chord_idx) = selected_chord {
-                let prev_chord = app.progression.prev_chord(chord_idx);
-                let cands = app.template.next(prev_chord, &app.key.mode);
-                let current = app.progression.chord(chord_idx).unwrap();
+                let prev_chord = seq.progression.prev_chord(chord_idx);
+                let cands = seq.template.next(prev_chord, &seq.key.mode);
+                let current = seq.progression.chord(chord_idx).unwrap();
                 let idx = if let Some(idx) = cands.iter().position(|cs| cs == current) {
                     if idx == cands.len() - 1 {
                         0
@@ -120,16 +119,15 @@ pub fn process_input(app: &mut App, key: KeyCode) -> Result<()> {
                 } else {
                     0
                 };
-                app.progression.set_chord(chord_idx, cands[idx].clone());
-                app.update_progression()?;
+                seq.progression.set_chord(chord_idx, cands[idx].clone());
             }
         }
         KeyCode::Char('D') => {
             // Cycle down a chord
             if let Some(chord_idx) = selected_chord {
-                let prev_chord = app.progression.prev_chord(chord_idx);
-                let cands = app.template.next(prev_chord, &app.key.mode);
-                let current = app.progression.chord(chord_idx).unwrap();
+                let prev_chord = seq.progression.prev_chord(chord_idx);
+                let cands = seq.template.next(prev_chord, &seq.key.mode);
+                let current = seq.progression.chord(chord_idx).unwrap();
                 let idx = if let Some(idx) = cands.iter().position(|cs| cs == current) {
                     if idx == 0 {
                         cands.len() - 1
@@ -139,8 +137,7 @@ pub fn process_input(app: &mut App, key: KeyCode) -> Result<()> {
                 } else {
                     0
                 };
-                app.progression.set_chord(chord_idx, cands[idx].clone());
-                app.update_progression()?;
+                seq.progression.set_chord(chord_idx, cands[idx].clone());
             }
         }
         _ => {}
@@ -148,8 +145,8 @@ pub fn process_input(app: &mut App, key: KeyCode) -> Result<()> {
     Ok(())
 }
 
-pub fn controls<'a>(app: &App) -> Vec<Span<'a>> {
-    let (_, seq_item) = app.selected();
+pub fn controls<'a>(seq: &Sequencer) -> Vec<Span<'a>> {
+    let (_, seq_item) = seq.selected();
     if seq_item.is_some() {
         vec![
             Span::raw(" [U]p [D]own"),

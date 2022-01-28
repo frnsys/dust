@@ -1,12 +1,7 @@
 use anyhow::Result;
-use tui::{
-    layout::Alignment,
-    style::{Style, Color},
-    text::{Span, Spans},
-    widgets::{Block, Paragraph, Borders},
-};
+use super::select::Select;
+use tui::widgets::Paragraph;
 use crossterm::event::KeyCode;
-use super::{App, InputTarget, InputMode};
 use crate::core::{ChordSpec, NUMERALS};
 
 const MAJ_CHORD_TYPES: [&str; 16] = [
@@ -22,20 +17,6 @@ const MIN_CHORD_TYPES: [&str; 9] = [
     "-", "-:b7", "-:7"
 ];
 
-pub struct ChordSelectState {
-    idx: usize,
-    chords: Vec<String>,
-}
-
-impl Default for ChordSelectState {
-    fn default() -> Self {
-        ChordSelectState {
-            idx: 0,
-            chords: chord_options(0),
-        }
-    }
-}
-
 fn chord_options(root: usize) -> Vec<String> {
     let numeral = NUMERALS[root % 7].to_string();
     let maj_chords = MAJ_CHORD_TYPES.iter()
@@ -46,104 +27,55 @@ fn chord_options(root: usize) -> Vec<String> {
         .map(|c| format!("{}{}", min_numeral, c));
 
     maj_chords.chain(min_chords).collect()
-        // .map(|cs| cs.try_into().unwrap())
-        // .collect()
 }
 
-pub fn render<'a>(app: &App, size: (usize, usize)) -> Paragraph<'a> {
-    let (_width, height) = size;
-    let state = &app.chord_select;
+pub struct ChordSelect {
+    select: Select,
+}
 
-    // Figure out what chord to start at
-    let start = state.idx.saturating_sub(height);
-    let end = state.chords.len().min(start+height);
-
-    let mut rows = vec![];
-    for (i, chord) in state.chords[start..end].iter().enumerate() {
-        let chord = chord.to_string();
-        let span = if i == state.idx {
-            Span::styled(chord, Style::default().fg(Color::LightBlue))
-        } else {
-            Span::raw(chord)
-        };
-        let row = Spans::from(span);
-        rows.push(row);
+impl Default for ChordSelect {
+    fn default() -> Self {
+        ChordSelect {
+            select: Select {
+                idx: 0,
+                choices: chord_options(0),
+            }
+        }
     }
-    Paragraph::new(rows)
-        .style(Style::default())
-        .alignment(Alignment::Left)
-        .block(
-            Block::default().borders(Borders::LEFT)
-        )
 }
 
-pub fn process_input(app: &mut App, key: KeyCode) -> Result<()> {
-    let mut state = &mut app.chord_select;
-    let n_chords = MAJ_CHORD_TYPES.len() + MIN_CHORD_TYPES.len();
+impl ChordSelect {
+    pub fn render<'a>(&self, height: usize) -> Paragraph<'a> {
+        self.select.render(height)
+    }
 
-    match key {
-        KeyCode::Char('j') => {
-            if state.idx < n_chords - 1 {
-                state.idx += 1;
-            } else {
-                // Wrap around
-                state.idx = 0;
+    /// Process input and returns a selected ChordSpec, if any,
+    /// and if the widget should be closed.
+    pub fn process_input(&mut self, key: KeyCode) -> Result<(Option<ChordSpec>, bool)> {
+        self.select.process_input(key);
+        let idx = self.select.idx;
+
+        let cs: ChordSpec = self.select.choices[idx].clone().try_into()?;
+        match key {
+            KeyCode::Char('j') | KeyCode::Char('k') | KeyCode::Char(' ') => {
+                Ok((Some(cs), false))
             }
-            let cs: ChordSpec = state.chords[state.idx].clone().try_into()?;
-            let chord = cs.chord_for_key(&app.key);
-            app.audio.play_chord(&chord)?;
-        }
-        KeyCode::Char('k') => {
-            if state.idx > 0 {
-                state.idx -= 1;
-            } else {
-                // Wrap around
-                state.idx = n_chords - 1;
-            }
-            let cs: ChordSpec = state.chords[state.idx].clone().try_into()?;
-            let chord = cs.chord_for_key(&app.key);
-            app.audio.play_chord(&chord)?;
-        }
-        KeyCode::Char('h') => {
-            // TODO select left
-        }
-        KeyCode::Char('l') => {
-            // TODO select right
-        }
-        KeyCode::Char(' ') => {
-            let cs: ChordSpec = state.chords[state.idx].clone().try_into()?;
-            let chord = cs.chord_for_key(&app.key);
-            app.audio.play_chord(&chord)?;
-        }
-        KeyCode::Char('q') | KeyCode::Esc => {
-            app.input_mode = InputMode::Normal;
-        }
-        KeyCode::Char(c) => {
-            if c.is_numeric() {
-                let numeral = c.to_string().parse::<usize>()? - 1;
-                if numeral < 7 {
-                    state.chords = chord_options(numeral);
-                }
-            }
-        }
-        KeyCode::Enter => {
-            match app.input_target {
-                InputTarget::Chord(i) => {
-                    let chord_spec: Result<ChordSpec, _> = state.chords[state.idx].clone().try_into();
-                    match chord_spec {
-                        Ok(cs) => {
-                            app.progression.set_chord(i, cs);
-                        }
-                        Err(_) => {
-                            app.message = "Invalid chord";
-                        }
+            KeyCode::Char(c) => {
+                if c.is_numeric() {
+                    let numeral = c.to_string().parse::<usize>()? - 1;
+                    if numeral < 7 {
+                        self.select.choices = chord_options(numeral);
                     }
                 }
-                _ => {}
+                Ok((None, false))
             }
-            app.input_mode = InputMode::Normal;
+            KeyCode::Enter => {
+                Ok((Some(cs), true))
+            }
+            KeyCode::Esc => {
+                Ok((None, true))
+            }
+            _ => Ok((None, false))
         }
-        _ => {}
     }
-    Ok(())
 }

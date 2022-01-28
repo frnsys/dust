@@ -1,58 +1,71 @@
 use anyhow::Result;
 use tui::{
     layout::Alignment,
-    style::Style,
+    style::{Style, Color},
     text::{Span, Spans},
     widgets::{Block, Paragraph, Borders},
 };
 use crossterm::event::KeyCode;
-use super::{App, InputTarget, InputMode};
 
-pub fn render<'a>(app: &App) -> Paragraph<'a> {
-    let mut spans = vec![];
-    for (i, choice) in app.choices.iter().enumerate() {
-        spans.push(Spans::from(
-                Span::raw(format!("{}. {}", i, choice))));
-    }
-    Paragraph::new(spans)
-        .style(Style::default())
-        .alignment(Alignment::Left)
-        .block(
-            Block::default().borders(Borders::LEFT)
-        )
+pub struct Select {
+    pub idx: usize,
+    pub choices: Vec<String>,
 }
 
-pub fn process_input(app: &mut App, key: KeyCode) -> Result<()> {
-    match key {
-        KeyCode::Char('j') => {
-            // TODO scroll list down
+impl Select {
+    pub fn render<'a>(&self, height: usize) -> Paragraph<'a> {
+        let start = self.idx.saturating_sub(height);
+        let end = self.choices.len().min(start+height);
+
+        let mut rows = vec![];
+        for (i, choice) in self.choices[start..end].iter().enumerate() {
+            let choice = choice.to_string();
+            let span = if i + start == self.idx {
+                Span::styled(choice, Style::default().fg(Color::LightBlue))
+            } else {
+                Span::raw(choice)
+            };
+            let row = Spans::from(span);
+            rows.push(row);
         }
-        KeyCode::Char('k') => {
-            // TODO scroll list up
-        }
-        KeyCode::Char(c) => {
-            if c.is_numeric() {
-                app.input.push(c);
-            }
-        }
-        KeyCode::Enter => {
-            let input = app.input.drain(..)
-                .collect::<String>();
-            if input.len() > 0 {
-                match app.input_target {
-                    InputTarget::MidiPort => {
-                        let idx = input.parse::<usize>()?;
-                        app.midi.connect_port(idx).unwrap();
-                    }
-                    _ => {}
-                }
-            }
-            app.input_mode = InputMode::Normal;
-        }
-        KeyCode::Esc => {
-            app.input_mode = InputMode::Normal;
-        }
-        _ => {}
+        Paragraph::new(rows)
+            .style(Style::default())
+            .alignment(Alignment::Left)
+            .block(
+                Block::default().borders(Borders::LEFT)
+            )
     }
-    Ok(())
+
+    /// Process input and returns the selected index
+    /// and if the widget should be closed.
+    pub fn process_input(&mut self, key: KeyCode) -> Result<(Option<usize>, bool)> {
+        let n_choices = self.choices.len();
+        match key {
+            KeyCode::Char('j') => {
+                if self.idx < self.choices.len() - 1 {
+                    self.idx += 1;
+                } else {
+                    // Wrap around
+                    self.idx = 0;
+                }
+                Ok((None, false))
+            }
+            KeyCode::Char('k') => {
+                if self.idx > 0 {
+                    self.idx -= 1;
+                } else {
+                    // Wrap around
+                    self.idx = n_choices - 1;
+                }
+                Ok((None, false))
+            }
+            KeyCode::Enter => {
+                Ok((Some(self.idx), true))
+            }
+            KeyCode::Esc => {
+                Ok((None, true))
+            }
+            _ => Ok((None, false))
+        }
+    }
 }
