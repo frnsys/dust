@@ -10,8 +10,38 @@ major:
     - I vi IV V
     - I vi ii V
     - I ii iii IV
-    - I bIII IV
+    - I IIIb IV
     - vi V IV II
+    - IV I III
+    - vi V I IV
+    - I I:2>1 IV I
+    - V vi IV I
+    - vi IV I V
+    - IV I V vi
+    - IV I vi V
+    - ii IV vi V
+    - vi V IV ii
+    - vi V IV III
+    - IV V vi I
+    - IV V vi I>1
+    - IV V vi V
+    - vi IV V ii
+    - vi I IV V ii iii IV V
+    - I VI iv#- V
+    - I V v#- vi IV I V
+    - I V v#- vi II IV
+    - vi ii I V
+    - vi ii V I
+    - I vi:7 ii:7 V
+    - vi:7 ii:7 V:b7 I
+    - ii IV I V
+    - IV ii iv V
+    - IV I V III
+    - vi V II IV
+    - I IIIb VIIb IV
+    - iii iiib ii
+    - I iii V iii iii V
+    - I:7 iib:b7 vi:b9 iv:b9
 minor:
   patterns:
     - i v iv V
@@ -21,4 +51,6 @@ minor:
     - i III IV VI
     - i III iv VI
     - i IIb VI:7 vii:7
+    - i v iv i
+    - i v vb iv i
 resolution: 8
