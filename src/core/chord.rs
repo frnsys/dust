@@ -518,30 +518,38 @@ mod test {
     fn test_chord_intervals() {
         // Reference: <https://en.wikipedia.org/wiki/List_of_chords>
         let examples = vec![
-            ("I", vec![0, 4, 7]),             // Major triad
-            ("I:6", vec![0, 4, 7, 9]),         // Major 6th
-            ("I:7", vec![0, 4, 7, 11]),        // Major 7th
-            ("I:7,9", vec![0, 4, 7, 11, 14]),  // Major 9th
+            ("I", vec![0, 4, 7]),              // Major triad, e.g. C
+            ("I:6", vec![0, 4, 7, 9]),         // Major 6th, e.g. C6
+            ("I:6,9", vec![0, 4, 7, 9, 14]),   // Major 6th/9th, e.g. C6/9
+            ("I:7", vec![0, 4, 7, 11]),        // Major 7th, e.g. Cmaj7
+            ("I:7,9", vec![0, 4, 7, 11, 14]),  // Major 9th, e.g. Cmaj7/9
 
-            ("i", vec![0, 3, 7]),              // Minor triad
-            ("i:#6", vec![0, 3, 7, 9]),        // Minor 6th
-            ("i:7", vec![0, 3, 7, 10]),        // Minor 7th
-            ("i:7,#9", vec![0, 3, 7, 10, 14]), // Minor 9th
+            ("i", vec![0, 3, 7]),              // Minor triad, e.g. Cm
+            ("i:#6", vec![0, 3, 7, 9]),        // Minor 6th, e.g. Cm6
+            ("i:7", vec![0, 3, 7, 10]),        // Minor 7th, e.g. Cm7
+            ("i:7,#9", vec![0, 3, 7, 10, 14]), // Minor 9th, e.g. Cm7/9
+            ("i:#7", vec![0, 3, 7, 11]),       // Minor 9th, e.g. Cm7+
+            ("i:#7,#9", vec![0, 3, 7, 11, 14]),// Minor 9th, e.g. Cm7+/9
 
-            ("I:b7", vec![0, 4, 7, 10]),       // Dominant 7th
-            ("I:b7,9", vec![0, 4, 7, 10, 14]), // Dominant 9th
+            ("I:b7", vec![0, 4, 7, 10]),       // Dominant 7th, e.g. C7
+            ("I:b7,9", vec![0, 4, 7, 10, 14]), // Dominant 9th, e.g. C7/9
 
-            ("I+", vec![0, 4, 8]),            // Augmented triad
-            ("I+:b7", vec![0, 4, 8, 10]),      // Augmented 7th
+            ("I:b9", vec![0, 4, 7, 13]),       // Flat 9th, e.g. Cb9
+            ("I:9", vec![0, 4, 7, 14]),        // Added 9th, e.g. Cadd9
 
-            ("i-", vec![0, 3, 6]),            // Diminished triad
-            ("i-:b7", vec![0, 3, 6, 9]),       // Diminished 7th
-            ("i-:7", vec![0, 3, 6, 10]),       // Half-Diminished 7th
+            ("I+", vec![0, 4, 8]),             // Augmented triad, e.g. Caug
+            ("I+:b7", vec![0, 4, 8, 10]),      // Augmented 7th, e.g. Caug7
+            ("I+:9", vec![0, 4, 8, 14]),       // Augmented 9th, e.g. Caug9
 
-            ("I_", vec![0, 2, 7]),            // Sus 2
-            ("I^", vec![0, 5, 7]),            // Sus 4
+            ("i-", vec![0, 3, 6]),             // Diminished triad, e.g. Cdim
+            ("i-:b7", vec![0, 3, 6, 9]),       // Diminished 7th, e.g. Cdim7
+            ("i-:7", vec![0, 3, 6, 10]),       // Half-Diminished 7th, e.g. Cø7 or Cm7b5
 
-            ("I5", vec![0, 7]),               // Power
+            ("I_", vec![0, 2, 7]),             // Sus 2, e.g. Csus2
+            ("I^", vec![0, 5, 7]),             // Sus 4, e.g. Csus4
+            ("I^:b7,9", vec![0, 5, 7, 10, 14]),// 9th Sus 4, e.g. C9sus4
+
+            ("I5", vec![0, 7]),                // Power, e.g. C5
         ];
         for (name, expected) in examples {
             println!("Name: {:?}", name);
