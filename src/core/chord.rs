@@ -4,8 +4,16 @@ use std::{fmt, str::FromStr};
 use super::note::Note;
 use super::interval::Interval;
 use super::key::{Key, Mode, MAJOR, MINOR};
+use lazy_static::lazy_static;
 
 pub const NUMERALS: [&str; 7] = ["I", "II", "III", "IV", "V", "VI", "VII"];
+
+lazy_static! {
+    static ref CHORD_RE: Regex = Regex::new(
+        r"^([IV]+|[iv]+)([b#])*([+-^_5])?(:([b#]?\d+,?)*)?(/([b#]?\d+))?(>\d+)?(<\d+)?(~([IV]+|[iv]+))?$")
+        .unwrap();
+    static ref EXT_RE: Regex = Regex::new(r"^([b#]*)(\d+)$").unwrap();
+}
 
 fn numeral_to_index(numeral: &str) -> Option<usize> {
     NUMERALS.iter().position(|&n| n == numeral.to_uppercase())
@@ -44,8 +52,7 @@ impl FromStr for Extension {
 
     /// Parses a chord extension, e.g. "7", "b7", "#9", "bb7"
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let re = Regex::new(r"^([b#]*)(\d+)$").unwrap();
-        let caps = re.captures(s).ok_or(ChordParseError::InvalidExtension(s.to_string()))?;
+        let caps = EXT_RE.captures(s).ok_or(ChordParseError::InvalidExtension(s.to_string()))?;
         let adjustments = caps.get(1).and_then(|m| Some(m.as_str())).unwrap_or_default();
         let degree = caps.get(2)
             .ok_or(ChordParseError::InvalidExtension("(none)".to_string()))?
@@ -249,12 +256,11 @@ pub enum ChordParseError {
     ParseIntError(#[from] std::num::ParseIntError),
 }
 
-/// Try to parse a chord from a string, e.g. "III-7,9".
+/// Try to parse a chord from a string, e.g. "III:7,9".
 impl FromStr for ChordSpec {
     type Err = ChordParseError;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let re = Regex::new(r"^([IV]+|[iv]+)([b#])*([+-^_5])?(:([b#]?\d+,?)*)?(/([b#]?\d+))?(>\d+)?(<\d+)?(~([IV]+|[iv]+))?$").unwrap();
-        let caps = re.captures(s).ok_or(ChordParseError::InvalidChord(s.to_string()))?;
+        let caps = CHORD_RE.captures(s).ok_or(ChordParseError::InvalidChord(s.to_string()))?;
         let numeral = caps.get(1)
             .ok_or(ChordParseError::InvalidNumeral("(none)".to_string()))?
             .as_str();

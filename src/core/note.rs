@@ -3,8 +3,15 @@ use thiserror::Error;
 use std::{fmt, str::FromStr};
 use std::ops::{Add, Sub};
 use super::interval::Interval;
+use lazy_static::lazy_static;
 
 const NAMES: [&str; 12] = ["A", "Bb", "B", "C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab"];
+
+lazy_static! {
+    static ref NOTE_RE: Regex = Regex::new(
+        r"^([A-G][b#]?)(\d)$")
+        .unwrap();
+}
 
 /// 0 semitones = "A0".
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
@@ -28,8 +35,7 @@ pub enum NoteParseError {
 impl FromStr for Note {
     type Err = NoteParseError;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let re = Regex::new(r"^([A-G][b#]?)(\d)$").unwrap();
-        let caps = re.captures(s).ok_or(NoteParseError::InvalidName(s.to_string()))?;
+        let caps = NOTE_RE.captures(s).ok_or(NoteParseError::InvalidName(s.to_string()))?;
         let name = caps.get(1)
             .ok_or(NoteParseError::InvalidName("(none)".to_string()))?
             .as_str();

@@ -45,7 +45,7 @@ impl<'a> App<'a> {
         App {
             midi: midi.clone(),
             select: None,
-            mode: Mode::Sequencer,
+            mode: Mode::Performance,
             sequencer: Sequencer::new(midi.clone(), template, save_dir.clone()),
             performance: Performance::new(midi.clone(), save_dir),
         }
