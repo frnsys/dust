@@ -90,6 +90,7 @@ impl<'a> Sequencer<'a> {
 
             events: EventEmitter::new().unwrap(),
         };
+
         seq.gen_progression().unwrap();
         seq
     }

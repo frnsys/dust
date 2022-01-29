@@ -10,7 +10,7 @@ pub const NUMERALS: [&str; 7] = ["I", "II", "III", "IV", "V", "VI", "VII"];
 
 lazy_static! {
     static ref CHORD_RE: Regex = Regex::new(
-        r"^([IV]+|[iv]+)([b#])*([+-^_5])?(:([b#]?\d+,?)*)?(/([b#]?\d+))?(>\d+)?(<\d+)?(~([IV]+|[iv]+))?$")
+        r"^([IV]+|[iv]+)([b#])*([+-^_5])?(:([b#]?\d+,?)*)?(/([b#]?\d+)|(%([b#]?\d+)))?(>\d+)?(<\d+)?(~([IV]+|[iv]+))?$")
         .unwrap();
     static ref EXT_RE: Regex = Regex::new(r"^([b#]*)(\d+)$").unwrap();
 }
@@ -101,6 +101,7 @@ pub struct ChordSpec {
     triad: Triad,
     extensions: Vec<Extension>,
     bass_degree: Option<Extension>,
+    inversion: usize,
     rel_key: Option<(usize, Mode)>,
 }
 
@@ -113,6 +114,7 @@ impl ChordSpec {
             triad: Triad::Mode,
             extensions: vec![],
             bass_degree: None,
+            inversion: 0,
             rel_key: None
         }
     }
@@ -166,6 +168,12 @@ impl ChordSpec {
         self
     }
 
+    /// Set the inversion
+    pub fn inversion(mut self, inversion: usize) -> ChordSpec {
+        self.inversion = inversion;
+        self
+    }
+
     pub fn intervals(&self) -> Vec<isize> {
         let offset = match self.rel_key {
             None => 0,
@@ -214,16 +222,22 @@ impl ChordSpec {
             intervals.push(ext.to_interval(&mode));
         }
 
-        let intervals = if let Some(bass_degree) = &self.bass_degree {
+        if let Some(bass_degree) = &self.bass_degree {
             let bass_interval = bass_degree.to_interval(&mode);
-            intervals.iter().map(|intv| if *intv < bass_interval {
+            intervals = intervals.iter().map(|intv| if *intv < bass_interval {
                 intv + 12
             } else {
                 *intv
             }).collect()
-        } else {
-            intervals
         };
+
+        if self.inversion > 0 {
+            let inv = self.inversion.min(intervals.len());
+            let shifted: Vec<isize> = intervals.drain(..inv)
+                .map(|intv| intv + 12).collect();
+            intervals.extend(shifted);
+        }
+
         intervals.iter().map(|intv| offset + *intv).collect()
     }
 
@@ -267,10 +281,11 @@ impl FromStr for ChordSpec {
         let adj = caps.get(2).and_then(|m| Some(m.as_str()));
         let triad = caps.get(3).and_then(|m| Some(m.as_str()));
         let exts = caps.get(4).and_then(|m| Some(m.as_str()));
-        let bass_degree = caps.get(6).and_then(|m| Some(m.as_str()));
-        let shift_up = caps.get(8).and_then(|m| Some(m.as_str()));
-        let shift_down = caps.get(9).and_then(|m| Some(m.as_str()));
-        let rel_key = caps.get(11).and_then(|m| Some(m.as_str()));
+        let bass_degree = caps.get(7).and_then(|m| Some(m.as_str()));
+        let inversion = caps.get(9).and_then(|m| Some(m.as_str()));
+        let shift_up = caps.get(10).and_then(|m| Some(m.as_str()));
+        let shift_down = caps.get(11).and_then(|m| Some(m.as_str()));
+        let rel_key = caps.get(13).and_then(|m| Some(m.as_str()));
 
         let mode = numeral_to_mode(numeral)?;
         let mut adj = match adj {
@@ -316,7 +331,7 @@ impl FromStr for ChordSpec {
 
         if let Some(degree_0) = numeral_to_index(numeral) {
             let bass_degree = if let Some(bass) = bass_degree {
-                Some(bass[1..].try_into()?)
+                Some(bass.try_into()?)
             } else {
                 None
             };
@@ -332,6 +347,12 @@ impl FromStr for ChordSpec {
                 Ok(None)
             }?;
 
+            let inversion = if let Some(inv) = inversion {
+                inv.parse::<usize>()?
+            } else {
+                0
+            };
+
             Ok(ChordSpec {
                 // Convert to 1-indexed degrees
                 degree: degree_0 + 1,
@@ -340,7 +361,8 @@ impl FromStr for ChordSpec {
                 mode,
                 extensions: exts,
                 bass_degree,
-                rel_key
+                inversion,
+                rel_key,
             })
         } else {
             Err(ChordParseError::InvalidNumeral(numeral.to_string()))
@@ -403,6 +425,12 @@ impl fmt::Display for ChordSpec {
             name.push('/');
             name.push_str(&bass_degree.to_string());
         }
+
+        if self.inversion > 0{
+            name.push('%');
+            name.push_str(&self.inversion.to_string());
+        }
+
 
         if octaves != 0 {
             if self.adj < 0 {
@@ -518,6 +546,9 @@ mod test {
 
         let spec = ChordSpec::new(1, Mode::Major).shift(-1);
         assert_eq!(spec.to_string(), "I<1".to_string());
+
+        let spec = ChordSpec::new(1, Mode::Major).inversion(1);
+        assert_eq!(spec.to_string(), "I%1".to_string());
     }
 
     #[test]
@@ -770,6 +801,20 @@ mod test {
 
         // Second inversion
         let cs: ChordSpec = "I/5".try_into().unwrap();
+        let chord = cs.chord_for_key(&key);
+        let notes: Vec<String> = chord.notes()
+            .iter().map(|n| n.to_string()).collect();
+        assert_eq!(notes, vec!["G3", "C4", "E4"]);
+
+        // First inversion
+        let cs: ChordSpec = "I%1".try_into().unwrap();
+        let chord = cs.chord_for_key(&key);
+        let notes: Vec<String> = chord.notes()
+            .iter().map(|n| n.to_string()).collect();
+        assert_eq!(notes, vec!["E3", "G3", "C4"]);
+
+        // Second inversion
+        let cs: ChordSpec = "I%2".try_into().unwrap();
         let chord = cs.chord_for_key(&key);
         let notes: Vec<String> = chord.notes()
             .iter().map(|n| n.to_string()).collect();

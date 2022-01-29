@@ -34,9 +34,13 @@ The chord naming system here is a little different than the conventional roman n
     - These _do not stack_; i.e. if you want to have a dominant 9th it needs to be written as `V:b7,9` and not `V:9`
     - Note that this is different than conventional notation, which isn't really systematic! For example, the dominant 7th is conventionally notated as `V7`; a more straightforward notation would have this mean the major 7th. Here the dominant 7th is notated as `V:b7` and the major 7th is notated as `V:7`.
     - This lets you create e.g. cluster chords, for example `I:2`
-5. Optional: After `/`, specify a different bass interval
-    - E.g. `III/3` sets the major 3rd to be the bass note
-    - You can create inversions this way, e.g. `I/3` is the first inversion and `I/5` is the second inversion.
+5. Optional: Specify an inversion by either:
+    - Specifying the bass scale degree after `/`
+        - E.g. `III/3` sets the major 3rd to be the bass note
+        - Thus e.g. `I/3` is the first inversion and `I/5` is the second inversion.
+    - Specifying the inversion number after `%`
+        - E.g. `III%1` is the first inversion, `III%2` is the second inversion, etc
+        - Thus `I/3 == I%1`, `I/5 == I%2`, etc.
 6. Optional: Shift the chord up an octave with `>1` or down an octave `<1`.
     - E.g. `I>1`
 7. Optional: After `~`, specify a different relative key (you can think of this as the chord being "drawn from" that relative key)

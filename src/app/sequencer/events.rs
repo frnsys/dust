@@ -96,12 +96,15 @@ impl EventEmitter {
         )?;
 
         metronome.start()?;
-        self.metronome = Some(Metronome {
+        let mut m = Metronome {
             metronome,
             muted: false,
             paused: false,
             tick: tick_sequence_handle,
-        });
+        };
+        // Start muted
+        m.mute()?;
+        self.metronome = Some(m);
         Ok(())
     }
 
