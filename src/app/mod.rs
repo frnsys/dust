@@ -2,6 +2,7 @@ mod select;
 mod sequencer;
 mod text_input;
 mod chord_select;
+mod performance;
 
 use anyhow::Result;
 use crate::midi::MIDI;
@@ -20,19 +21,21 @@ use tui::{
 };
 use select::Select;
 use sequencer::Sequencer;
+use performance::Performance;
 use crossterm::event::{self, Event, KeyCode};
 
 const TICK_RATE: Duration = Duration::from_millis(200);
 
 enum Mode {
     Sequencer,
-    Freestyle,
+    Performance,
 }
 
 pub struct App<'a> {
     mode: Mode,
     midi: Arc<RefCell<MIDI>>,
     sequencer: Sequencer<'a>,
+    performance: Performance<'a>,
     select: Option<Select>,
 }
 
@@ -43,7 +46,8 @@ impl<'a> App<'a> {
             midi: midi.clone(),
             select: None,
             mode: Mode::Sequencer,
-            sequencer: Sequencer::new(midi.clone(), template, save_dir),
+            sequencer: Sequencer::new(midi.clone(), template, save_dir.clone()),
+            performance: Performance::new(midi.clone(), save_dir),
         }
     }
 }
@@ -67,15 +71,15 @@ pub fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> Result<(
             // Controls help bar
             let mut controls = vec![];
             match app.mode {
-                Mode::Freestyle => {
-                    // TODO
+                Mode::Performance => {
+                    controls.extend(app.performance.controls());
                 }
                 Mode::Sequencer => {
                     controls.extend(app.sequencer.controls());
                 }
             }
             controls.push(
-                Span::raw(" [P]ort [Q]uit"));
+                Span::raw(" [M]ode [P]ort [Q]uit"));
 
             let help = Paragraph::new(Spans::from(controls))
                 .alignment(Alignment::Left);
@@ -84,9 +88,8 @@ pub fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> Result<(
             match &mut app.select {
                 None => {
                     let chunks: Vec<(Paragraph, Rect)> = match app.mode {
-                        Mode::Freestyle => {
-                            // TODO
-                            vec![]
+                        Mode::Performance => {
+                            app.performance.render(rects[0])
                         }
                         Mode::Sequencer => {
                             app.sequencer.render(rects[0])
@@ -110,9 +113,8 @@ pub fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> Result<(
             if let Event::Key(key) = event::read()? {
                 // Check if one of the modes is capturing all input
                 let input_mode = match app.mode {
-                    Mode::Freestyle => {
-                        // TODO
-                        false
+                    Mode::Performance => {
+                        app.performance.capture_input()
                     }
                     Mode::Sequencer => {
                         app.sequencer.capture_input()
@@ -121,18 +123,18 @@ pub fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> Result<(
 
                 if input_mode {
                     match app.mode {
-                        Mode::Freestyle => {
-                            // TODO
+                        Mode::Performance => {
+                            app.performance.process_input(key)?;
                         }
                         Mode::Sequencer => {
-                            app.sequencer.process_input(key.code)?;
+                            app.sequencer.process_input(key)?;
                         }
                     }
                 } else {
                     match &mut app.select {
                         // Midi port selection
                         Some(ref mut select) => {
-                            let (selected, close) = select.process_input(key.code)?;
+                            let (selected, close) = select.process_input(key)?;
                             if let Some(idx) = selected {
                                 app.midi.borrow_mut().connect_port(idx).unwrap();
                             }
@@ -146,6 +148,21 @@ pub fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> Result<(
                                 KeyCode::Char('Q') => {
                                     return Ok(());
                                 },
+
+                                // Switch mode
+                                KeyCode::Char('M') => {
+                                    app.mode = match app.mode {
+                                        Mode::Sequencer => {
+                                            app.sequencer.pause()?;
+                                            Mode::Performance
+                                        },
+                                        Mode::Performance => {
+                                            app.sequencer.resume()?;
+                                            Mode::Sequencer
+                                        },
+                                    }
+                                },
+
                                 // Change the MIDI output port
                                 KeyCode::Char('P') => {
                                     let ports = app.midi.borrow().available_ports().unwrap();
@@ -156,11 +173,11 @@ pub fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> Result<(
                                 }
                                 _ => {
                                     match app.mode {
-                                        Mode::Freestyle => {
-                                            // TODO
+                                        Mode::Performance => {
+                                            app.performance.process_input(key)?;
                                         }
                                         Mode::Sequencer => {
-                                            app.sequencer.process_input(key.code)?;
+                                            app.sequencer.process_input(key)?;
                                         }
                                     }
                                 }

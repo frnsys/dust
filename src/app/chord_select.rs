@@ -1,8 +1,9 @@
 use anyhow::Result;
 use super::select::Select;
+use super::text_input::TextInput;
 use tui::widgets::Paragraph;
-use crossterm::event::KeyCode;
 use crate::core::{ChordSpec, NUMERALS};
+use crossterm::event::{KeyEvent, KeyCode};
 
 const MAJ_CHORD_TYPES: [&str; 16] = [
     "", ":6", ":6,9", ":7", ":7,9",
@@ -29,53 +30,80 @@ fn chord_options(root: usize) -> Vec<String> {
     maj_chords.chain(min_chords).collect()
 }
 
-pub struct ChordSelect {
+pub struct ChordSelect<'a> {
+    numeral: usize,
     select: Select,
+    pub text_input: TextInput<'a>,
 }
 
-impl Default for ChordSelect {
+impl<'a> Default for ChordSelect<'a> {
     fn default() -> Self {
+        let mut text_input = TextInput::new(
+            "Chord: ",
+            |_c: char| { true });
+
+        let choices = chord_options(0);
+        text_input.set_input(choices[0].to_string());
         ChordSelect {
+            numeral: 0,
+            text_input,
             select: Select {
                 idx: 0,
-                choices: chord_options(0),
+                choices,
             }
         }
     }
 }
 
-impl ChordSelect {
-    pub fn render<'a>(&self, height: usize) -> Paragraph<'a> {
+impl<'a> ChordSelect<'a> {
+    pub fn render<'b>(&self, height: usize) -> Paragraph<'b> {
         self.select.render(height)
     }
 
     /// Process input and returns a selected ChordSpec, if any,
     /// and if the widget should be closed.
-    pub fn process_input(&mut self, key: KeyCode) -> Result<(Option<ChordSpec>, bool)> {
-        self.select.process_input(key);
+    pub fn process_input(&mut self, key: KeyEvent) -> Result<(Option<ChordSpec>, bool)> {
+        self.select.process_input(key)?;
         let idx = self.select.idx;
 
         let cs: ChordSpec = self.select.choices[idx].clone().try_into()?;
-        match key {
+        match key.code {
             KeyCode::Char('j') | KeyCode::Char('k') | KeyCode::Char(' ') => {
+                self.text_input.set_input(cs.to_string());
                 Ok((Some(cs), false))
             }
-            KeyCode::Char(c) => {
-                if c.is_numeric() {
-                    let numeral = c.to_string().parse::<usize>()? - 1;
-                    if numeral < 7 {
-                        self.select.choices = chord_options(numeral);
-                    }
+            KeyCode::Char('h') => {
+                if self.numeral > 0 {
+                    self.numeral -= 1;
+                } else {
+                    self.numeral = 6;
                 }
+                self.text_input.set_input(cs.to_string());
+                self.select.choices = chord_options(self.numeral);
+                Ok((None, false))
+            }
+            KeyCode::Char('l') => {
+                if self.numeral < 6 {
+                    self.numeral += 1;
+                } else {
+                    self.numeral = 0;
+                }
+                self.text_input.set_input(cs.to_string());
+                self.select.choices = chord_options(self.numeral);
                 Ok((None, false))
             }
             KeyCode::Enter => {
+                // TODO handle this properly
+                let cs: ChordSpec = self.text_input.input.clone().try_into()?;
                 Ok((Some(cs), true))
             }
             KeyCode::Esc => {
                 Ok((None, true))
             }
-            _ => Ok((None, false))
+            _ => {
+                self.text_input.process_input(key)?;
+                Ok((None, false))
+            }
         }
     }
 }

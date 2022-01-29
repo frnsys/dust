@@ -5,7 +5,7 @@ use tui::{
     text::{Span, Spans},
     widgets::{Block, Paragraph, Borders},
 };
-use crossterm::event::KeyCode;
+use crossterm::event::{KeyEvent, KeyCode};
 
 pub struct Select {
     pub idx: usize,
@@ -38,9 +38,9 @@ impl Select {
 
     /// Process input and returns the selected index
     /// and if the widget should be closed.
-    pub fn process_input(&mut self, key: KeyCode) -> Result<(Option<usize>, bool)> {
+    pub fn process_input(&mut self, key: KeyEvent) -> Result<(Option<usize>, bool)> {
         let n_choices = self.choices.len();
-        match key {
+        match key.code {
             KeyCode::Char('j') => {
                 if self.idx < self.choices.len() - 1 {
                     self.idx += 1;

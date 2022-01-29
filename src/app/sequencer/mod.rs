@@ -4,7 +4,6 @@ mod progression;
 
 use anyhow::Result;
 use std::{sync::Arc, cell::RefCell};
-use crossterm::event::KeyCode;
 use crate::midi::MIDI;
 use crate::file::save_to_midi_file;
 use crate::app::text_input::TextInput;
@@ -17,12 +16,13 @@ use tui::{
     style::{Style, Modifier, Color},
     layout::{Rect, Alignment, Constraint, Direction, Layout},
 };
+use crossterm::event::{KeyEvent, KeyCode};
 use events::EventEmitter;
 
 enum InputMode<'a> {
     Normal,
     Text(TextInput<'a>, TextTarget),
-    Chord(ChordSelect, ChordTarget),
+    Chord(ChordSelect<'a>, ChordTarget),
 }
 
 enum ChordTarget {
@@ -56,7 +56,7 @@ pub struct Sequencer<'a> {
     template: ProgressionTemplate,
     events: EventEmitter,
 
-    /// Last status message
+    // Last status message
     message: &'a str,
 }
 
@@ -147,6 +147,14 @@ impl<'a> Sequencer<'a> {
         Ok(())
     }
 
+    pub fn pause(&mut self) -> Result<()> {
+        self.events.pause()
+    }
+
+    pub fn resume(&mut self) -> Result<()> {
+        self.events.resume()
+    }
+
     pub fn capture_input(&self) -> bool {
         match self.input_mode {
             InputMode::Normal => false,
@@ -170,7 +178,7 @@ impl<'a> Sequencer<'a> {
                 // Send MIDI data
                 // There might be some timing issues here b/c of the tick rate
                 let chord = chord_spec.chord_for_key(&self.key);
-                self.midi.borrow_mut().play_chord(&chord, 1);
+                self.midi.borrow_mut().play_chord(&chord, 60);
             }
         }
 
@@ -217,7 +225,7 @@ impl<'a> Sequencer<'a> {
         rects
     }
 
-    pub fn process_input(&mut self, key: KeyCode) -> Result<()> {
+    pub fn process_input(&mut self, key: KeyEvent) -> Result<()> {
         match &mut self.input_mode {
             InputMode::Text(ref mut text_input, target) => {
                 let (input, close) = text_input.process_input(key)?;
@@ -265,28 +273,35 @@ impl<'a> Sequencer<'a> {
                 }
             }
             InputMode::Chord(ref mut chord_select, target) => {
-                let (sel, close) = chord_select.process_input(key)?;
-                if close {
-                    if let Some(cs) = sel {
-                        match target {
-                            ChordTarget::Seed => {
-                                self.gen_progression_from_seed(&cs)?;
-                            },
-                            ChordTarget::Chord => {
-                                let (idx, _) = self.selected();
-                                self.progression.sequence[idx] = Some(cs);
+                match chord_select.process_input(key) {
+                    Ok((sel, close)) => {
+                        if close {
+                            if let Some(cs) = sel {
+                                match target {
+                                    ChordTarget::Seed => {
+                                        self.gen_progression_from_seed(&cs)?;
+                                    },
+                                    ChordTarget::Chord => {
+                                        let (idx, _) = self.selected();
+                                        self.progression.sequence[idx] = Some(cs);
+                                    }
+                                }
                             }
+                            self.progression.update_chords();
+                            self.input_mode = InputMode::Normal;
+                        } else if let Some(cs) = sel {
+                            let chord = cs.chord_for_key(&self.key);
+                            self.midi.borrow_mut().play_chord(&chord, 1);
                         }
                     }
-                    self.progression.update_chords();
-                    self.input_mode = InputMode::Normal;
-                } else if let Some(cs) = sel {
-                    let chord = cs.chord_for_key(&self.key);
-                    self.midi.borrow_mut().play_chord(&chord, 1);
+                    Err(_) => {
+                        self.message = "Invalid chord";
+                        self.input_mode = InputMode::Normal;
+                    }
                 }
             }
             InputMode::Normal => {
-                match key {
+                match key.code {
                     // Change tempo
                     KeyCode::Char('t') => {
                         self.input_mode = InputMode::Text(
@@ -340,7 +355,7 @@ impl<'a> Sequencer<'a> {
                     }
 
                     // Toggle metronome sound
-                    KeyCode::Char('M') => {
+                    KeyCode::Char('T') => {
                         self.events.toggle_tick()?;
                     }
 
@@ -398,7 +413,7 @@ impl<'a> Sequencer<'a> {
         controls.extend(grid::controls(&self));
         controls.extend(progression::controls(&self));
         controls.push(
-            Span::raw(" [M]etrn [R]oll [S]eed [E]xport"));
+            Span::raw(" [T]ick [R]oll [S]eed [E]xport"));
         controls
     }
 }

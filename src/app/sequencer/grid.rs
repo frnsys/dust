@@ -5,7 +5,7 @@ use tui::{
     text::{Span, Spans},
     widgets::{Block, Paragraph, Borders},
 };
-use crossterm::event::KeyCode;
+use crossterm::event::{KeyEvent, KeyCode};
 use super::{Sequencer, InputMode, ChordSelect, ChordTarget};
 
 pub fn render<'a>(seq: &Sequencer) -> Paragraph<'a> {
@@ -79,10 +79,10 @@ pub fn render<'a>(seq: &Sequencer) -> Paragraph<'a> {
         )
 }
 
-pub fn process_input(seq: &mut Sequencer, key: KeyCode) -> Result<()> {
+pub fn process_input(seq: &mut Sequencer, key: KeyEvent) -> Result<()> {
     let (sel_idx, sel_item) = seq.selected();
 
-    match key {
+    match key.code {
         // Set the start of the loop
         KeyCode::Char('A') => {
             if seq.clip.0 != sel_idx && sel_idx < seq.clip.1 {

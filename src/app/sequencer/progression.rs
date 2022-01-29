@@ -5,8 +5,8 @@ use tui::{
     text::{Span, Spans},
     widgets::{Block, Paragraph, Borders},
 };
-use crossterm::event::KeyCode;
 use super::Sequencer;
+use crossterm::event::{KeyEvent, KeyCode};
 
 pub fn render<'a>(seq: &Sequencer) -> Paragraph<'a> {
     let progression = seq.progression.chords();
@@ -94,7 +94,7 @@ pub fn render<'a>(seq: &Sequencer) -> Paragraph<'a> {
         )
 }
 
-pub fn process_input(seq: &mut Sequencer, key: KeyCode) -> Result<()> {
+pub fn process_input(seq: &mut Sequencer, key: KeyEvent) -> Result<()> {
     let (seq_idx, seq_item) = seq.selected();
     let selected_chord = if seq_item.is_some() {
         let chord_idx = seq.progression.seq_idx_to_chord_idx(seq_idx);
@@ -103,7 +103,7 @@ pub fn process_input(seq: &mut Sequencer, key: KeyCode) -> Result<()> {
         None
     };
 
-    match key {
+    match key.code {
         KeyCode::Char('U') => {
             // Cycle up a chord
             if let Some(chord_idx) = selected_chord {

@@ -5,10 +5,10 @@ use tui::{
     text::{Span, Spans},
     widgets::{Block, Paragraph},
 };
-use crossterm::event::KeyCode;
+use crossterm::event::{KeyEvent, KeyCode};
 
 pub struct TextInput<'a> {
-    input: String,
+    pub input: String,
     label: &'a str,
     valid_chars: fn(char) -> bool,
 }
@@ -40,8 +40,8 @@ impl<'a> TextInput<'a> {
             )
     }
 
-    pub fn process_input(&mut self, key: KeyCode) -> Result<(Option<String>, bool)> {
-        match key {
+    pub fn process_input(&mut self, key: KeyEvent) -> Result<(Option<String>, bool)> {
+        match key.code {
             KeyCode::Enter => {
                 let input = self.input.drain(..)
                     .collect::<String>();
