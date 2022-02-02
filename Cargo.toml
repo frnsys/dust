@@ -19,3 +19,8 @@ clap = { version = "3.0.9", features = ["derive"] }
 tui = { version = "0.16", default-features = false, features = ['crossterm'] }
 crossterm = { version = "0.19" }
 lazy_static = "1.4.0"
+
+[profile.release]
+lto = "fat"
+codegen-units = 1
+panic = "abort"
