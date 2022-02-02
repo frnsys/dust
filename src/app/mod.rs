@@ -37,47 +37,18 @@ pub struct App<'a> {
     sequencer: Sequencer<'a>,
     performance: Performance<'a>,
     select: Option<Select>,
-
-    // Cache unchanging elements
-    help: Paragraph<'a>,
 }
 
 impl<'a> App<'a> {
     pub fn new(template: ProgressionTemplate, save_dir: String) -> App<'a> {
         let midi = Arc::new(RefCell::new(MIDI::new()));
-        let mut app = App {
+        App {
             midi: midi.clone(),
             select: None,
             mode: Mode::Performance,
             sequencer: Sequencer::new(midi.clone(), template, save_dir.clone()),
             performance: Performance::new(midi.clone(), save_dir),
-            help: Paragraph::new(Spans::from("")),
-        };
-        app.help = app.render_help();
-        app
-    }
-
-    pub fn set_mode(&mut self, mode: Mode) {
-        self.mode = mode;
-        self.help = self.render_help();
-    }
-
-    fn render_help(&mut self) -> Paragraph<'a> {
-        // Controls help bar
-        let mut controls = vec![];
-        match self.mode {
-            Mode::Performance => {
-                controls.extend(self.performance.controls());
-            }
-            Mode::Sequencer => {
-                controls.extend(self.sequencer.controls());
-            }
         }
-        controls.push(
-            Span::raw(" [M]ode [P]ort [Q]uit"));
-
-        Paragraph::new(Spans::from(controls))
-            .alignment(Alignment::Left)
     }
 }
 
@@ -96,7 +67,21 @@ pub fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> Result<(
                     ].as_ref())
                 .split(size);
 
-            frame.render_widget(app.help.clone(), rects[1]);
+            // Controls help bar
+            let mut controls = vec![];
+            match app.mode {
+                Mode::Performance => {
+                    controls.extend(app.performance.controls());
+                }
+                Mode::Sequencer => {
+                    controls.extend(app.sequencer.controls());
+                }
+            }
+            controls.push(
+                Span::raw(" [M]ode [P]ort [Q]uit"));
+            let help = Paragraph::new(Spans::from(controls))
+                .alignment(Alignment::Left);
+            frame.render_widget(help, rects[1]);
 
             match &mut app.select {
                 None => {
@@ -161,14 +146,14 @@ pub fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> Result<(
 
                                 // Switch mode
                                 KeyCode::Char('M') => {
-                                    match app.mode {
+                                    app.mode = match app.mode {
                                         Mode::Sequencer => {
                                             app.sequencer.pause()?;
-                                            app.set_mode(Mode::Performance);
+                                            Mode::Performance
                                         },
                                         Mode::Performance => {
                                             app.sequencer.resume()?;
-                                            app.set_mode(Mode::Sequencer);
+                                            Mode::Sequencer
                                         },
                                     }
                                 },

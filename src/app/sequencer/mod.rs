@@ -34,6 +34,7 @@ pub enum TextTarget {
     Root,
     Tempo,
     Bars,
+    Duration,
     Export,
 }
 
@@ -51,6 +52,7 @@ pub struct Sequencer<'a> {
     tempo: usize,
     bars: usize,
     key: Key,
+    note_duration: u64,
 
     progression: Progression,
     template: ProgressionTemplate,
@@ -80,6 +82,7 @@ impl<'a> Sequencer<'a> {
             bars,
             key,
             tempo: 100,
+            note_duration: 5,
             template,
             progression,
 
@@ -174,7 +177,7 @@ impl<'a> Sequencer<'a> {
                 // Send MIDI data
                 // There might be some timing issues here b/c of the tick rate
                 let chord = chord_spec.chord_for_key(&self.key);
-                self.midi.borrow_mut().play_chord(&chord, 60);
+                self.midi.borrow_mut().play_chord(&chord, self.note_duration);
             }
         }
 
@@ -239,6 +242,9 @@ impl<'a> Sequencer<'a> {
                                     }
                                 };
                                 self.restart_events()?;
+                            }
+                            TextTarget::Duration => {
+                                self.note_duration = input.parse::<u64>()?;
                             }
                             TextTarget::Tempo => {
                                 self.tempo = input.parse::<usize>()?;
@@ -319,6 +325,13 @@ impl<'a> Sequencer<'a> {
                             TextTarget::Root);
                     }
 
+                    // Change duration
+                    KeyCode::Char('d') => {
+                        self.input_mode = InputMode::Text(
+                            TextInput::new("Duration: ", |c: char| c.is_numeric()),
+                            TextTarget::Duration);
+                    }
+
                     // Change mode
                     KeyCode::Char('m') => {
                         self.key.mode = match self.key.mode {
@@ -393,6 +406,8 @@ impl<'a> Sequencer<'a> {
         let mut controls = vec![
             Span::raw("[r]oot:"),
             Span::styled(self.key.root.to_string(), param_style),
+            Span::raw(" [d]uration:"),
+            Span::styled(self.note_duration.to_string(), param_style),
             Span::raw(" [b]ars:"),
             Span::styled(self.bars.to_string(), param_style),
             Span::raw(" [m]ode:"),
