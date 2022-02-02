@@ -82,7 +82,6 @@ impl<'a> App<'a> {
 }
 
 pub fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> Result<()> {
-    let mut last_tick = Instant::now();
     loop {
         terminal.draw(|frame| {
             let size = frame.size();
@@ -120,10 +119,7 @@ pub fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> Result<(
             }
         })?;
 
-        let timeout = TICK_RATE
-            .checked_sub(last_tick.elapsed())
-            .unwrap_or_else(|| Duration::from_secs(0));
-        if event::poll(timeout)? {
+        if event::poll(TICK_RATE)? {
             if let Event::Key(key) = event::read()? {
                 // Check if one of the modes is capturing all input
                 let input_mode = match app.mode {
@@ -199,9 +195,6 @@ pub fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> Result<(
                         }
                     }
                 }
-            }
-            if last_tick.elapsed() >= TICK_RATE {
-                last_tick = Instant::now();
             }
         }
     }
