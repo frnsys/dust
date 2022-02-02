@@ -4,7 +4,7 @@ use std::{sync::Arc, cell::RefCell};
 use crate::file::save_to_midi_file;
 use crate::app::text_input::TextInput;
 use crate::app::chord_select::ChordSelect;
-use crate::core::{Key, Note, Mode, ChordSpec};
+use crate::core::{Key, ChordSpec};
 use crossterm::event::{KeyEvent, KeyCode, KeyModifiers};
 use tui::{
     widgets::Paragraph,
@@ -196,8 +196,13 @@ impl<'a> Performance<'a> {
                         if c.is_numeric() {
                             let idx = c.to_string().parse::<usize>()?;
                             if idx > 0 {
+                                let select = if let Some(cs) = &self.mappings[idx-1] {
+                                    ChordSelect::with_chord(cs)
+                                } else {
+                                    ChordSelect::default()
+                                };
                                 self.input_mode = InputMode::Chord(
-                                    ChordSelect::default(), idx-1);
+                                    select, idx-1);
                             }
                         }
 

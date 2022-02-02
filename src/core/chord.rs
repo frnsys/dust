@@ -95,7 +95,7 @@ pub enum Triad {
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct ChordSpec {
-    degree: usize,
+    pub degree: usize,
     adj: isize,
     mode: Mode,
     triad: Triad,

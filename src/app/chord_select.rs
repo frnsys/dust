@@ -56,6 +56,25 @@ impl<'a> Default for ChordSelect<'a> {
 }
 
 impl<'a> ChordSelect<'a> {
+    // Pre-select a given chord, if possible.
+    pub fn with_chord(cs: &ChordSpec) -> ChordSelect<'a> {
+        let cs_str = cs.to_string();
+        let mut sel = ChordSelect::default();
+        sel.set_numeral(cs.degree - 1);
+        let idx = match sel.select.choices.iter().position(|cs| cs == &cs_str) {
+            Some(idx) => idx,
+            None => 0,
+        };
+        sel.select.idx = idx;
+        sel.text_input.set_input(cs_str);
+        sel
+    }
+
+    pub fn set_numeral(&mut self, numeral_idx: usize) {
+        self.numeral = numeral_idx;
+        self.select.choices = chord_options(self.numeral);
+    }
+
     pub fn render<'b>(&self, height: usize) -> Paragraph<'b> {
         self.select.render(height)
     }
@@ -73,23 +92,23 @@ impl<'a> ChordSelect<'a> {
                 Ok((Some(cs), false))
             }
             KeyCode::Char('h') => {
-                if self.numeral > 0 {
-                    self.numeral -= 1;
+                let numeral = if self.numeral > 0 {
+                    self.numeral - 1
                 } else {
-                    self.numeral = 6;
-                }
+                    6
+                };
+                self.set_numeral(numeral);
                 self.text_input.set_input(cs.to_string());
-                self.select.choices = chord_options(self.numeral);
                 Ok((None, false))
             }
             KeyCode::Char('l') => {
-                if self.numeral < 6 {
-                    self.numeral += 1;
+                let numeral = if self.numeral < 6 {
+                    self.numeral + 1
                 } else {
-                    self.numeral = 0;
-                }
+                    0
+                };
+                self.set_numeral(numeral);
                 self.text_input.set_input(cs.to_string());
-                self.select.choices = chord_options(self.numeral);
                 Ok((None, false))
             }
             KeyCode::Enter => {

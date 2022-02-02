@@ -142,8 +142,13 @@ pub fn process_input(seq: &mut Sequencer, key: KeyEvent) -> Result<()> {
 
         // Edit or add chord at cursor
         KeyCode::Char('e') => {
+            let select = if let Some(cs) = sel_item {
+                ChordSelect::with_chord(cs)
+            } else {
+                ChordSelect::default()
+            };
             seq.input_mode = InputMode::Chord(
-                ChordSelect::default(),
+                select,
                 ChordTarget::Chord);
         }
 

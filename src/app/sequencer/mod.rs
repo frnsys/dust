@@ -8,7 +8,7 @@ use crate::midi::MIDI;
 use crate::file::save_to_midi_file;
 use crate::app::text_input::TextInput;
 use crate::app::chord_select::ChordSelect;
-use crate::core::{Key, Note, Mode, ChordSpec};
+use crate::core::{Key, Mode, ChordSpec};
 use crate::progression::{Progression, ProgressionTemplate};
 use tui::{
     text::Span,

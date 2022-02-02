@@ -9,7 +9,7 @@ use crate::midi::MIDI;
 use std::{
     sync::Arc,
     cell::RefCell,
-    time::{Duration, Instant},
+    time::Duration,
 };
 use crate::progression::ProgressionTemplate;
 use tui::{
