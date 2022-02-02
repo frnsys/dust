@@ -1,7 +1,4 @@
-Two output modes:
-
-- _Audio_: using piano samples (see `samples/readme.md`)
-- _MIDI_: Only tested with Bitwig. See setup instructions below.
+MIDI output: Only tested with Bitwig, but should work with any DAW. See setup instructions below.
 
 ## Bitwig MIDI setup
 
