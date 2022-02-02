@@ -21,6 +21,7 @@ enum InputMode<'a> {
 
 enum TextTarget {
     Root,
+    Duration,
     Export,
 }
 
@@ -28,6 +29,7 @@ pub struct Performance<'a> {
     midi: Arc<RefCell<MIDI>>,
 
     key: Key,
+    note_duration: u64,
     mappings: [Option<ChordSpec>; 9],
 
     save_dir: String,
@@ -44,6 +46,7 @@ impl<'a> Performance<'a> {
             key,
             midi,
             save_dir,
+            note_duration: 5,
             mappings: Default::default(),
             message: "",
             input_mode: InputMode::Normal,
@@ -123,6 +126,9 @@ impl<'a> Performance<'a> {
                                     }
                                 };
                             }
+                            TextTarget::Duration => {
+                                self.note_duration = input.parse::<u64>()?;
+                            }
                             TextTarget::Export => {
                                 let chords = self.mappings.iter().map(|m| {
                                     match m {
@@ -154,7 +160,7 @@ impl<'a> Performance<'a> {
                     Ok((sel, close)) => {
                         if let Some(cs) = sel {
                             let chord = cs.chord_for_key(&self.key);
-                            self.midi.borrow_mut().play_chord(&chord, 100);
+                            self.midi.borrow_mut().play_chord(&chord, self.note_duration);
                             self.mappings[*idx] = Some(cs);
                         }
                         if close {
@@ -167,7 +173,7 @@ impl<'a> Performance<'a> {
                                     let idx = c.to_string().parse::<usize>()? - 1;
                                     if let Some(cs) = &self.mappings[idx] {
                                         let chord = cs.chord_for_key(&self.key);
-                                        self.midi.borrow_mut().play_chord(&chord, 100);
+                                        self.midi.borrow_mut().play_chord(&chord, self.note_duration);
                                     }
                                 }
                             }
@@ -206,6 +212,13 @@ impl<'a> Performance<'a> {
                             TextTarget::Root);
                     }
 
+                    // Change duration
+                    KeyCode::Char('d') => {
+                        self.input_mode = InputMode::Text(
+                            TextInput::new("Duration: ", |c: char| c.is_numeric()),
+                            TextTarget::Duration);
+                    }
+
                     // Start export to MIDI flow
                     KeyCode::Char('E') => {
                         let mut text_input = TextInput::new("Path: ", |_c: char| true);
@@ -220,7 +233,7 @@ impl<'a> Performance<'a> {
                             let idx = c.to_string().parse::<usize>()? - 1;
                             if let Some(cs) = &self.mappings[idx] {
                                 let chord = cs.chord_for_key(&self.key);
-                                self.midi.borrow_mut().play_chord(&chord, 100);
+                                self.midi.borrow_mut().play_chord(&chord, self.note_duration);
                             }
                         }
                     }
@@ -238,6 +251,8 @@ impl<'a> Performance<'a> {
         let controls = vec![
             Span::raw("[r]oot:"),
             Span::styled(self.key.root.to_string(), param_style),
+            Span::raw(" [d]uration:"),
+            Span::styled(self.note_duration.to_string(), param_style),
             Span::raw(" [E]xport"),
         ];
         controls
