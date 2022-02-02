@@ -55,6 +55,17 @@ impl Key {
     }
 }
 
+impl Default for Key {
+    fn default() -> Self {
+        Key {
+            mode: Mode::Major,
+            root: Note {
+                semitones: 39
+            }, // C4
+        }
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;

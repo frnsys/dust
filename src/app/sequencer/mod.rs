@@ -63,12 +63,7 @@ pub struct Sequencer<'a> {
 impl<'a> Sequencer<'a> {
     pub fn new(midi: Arc<RefCell<MIDI>>, template: ProgressionTemplate, save_dir: String) -> Sequencer<'a> {
         let bars = 2;
-        let key = Key {
-            mode: Mode::Major,
-            root: Note {
-                semitones: 39
-            }, // C4
-        };
+        let key = Key::default();
         let progression = template.gen_progression(bars, &key.mode);
 
         let mut seq = Sequencer {

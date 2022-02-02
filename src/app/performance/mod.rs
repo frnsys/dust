@@ -39,12 +39,7 @@ pub struct Performance<'a> {
 
 impl<'a> Performance<'a> {
     pub fn new(midi: Arc<RefCell<MIDI>>, save_dir: String) -> Performance<'a> {
-        let key = Key {
-            mode: Mode::Major,
-            root: Note {
-                semitones: 39
-            }, // C4
-        };
+        let key = Key::default();
         Performance {
             key,
             midi,
