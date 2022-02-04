@@ -68,7 +68,7 @@ impl<'a> Sequencer<'a> {
         let key = Key::default();
         let progression = template.gen_progression(bars, &key.mode);
 
-        let mut seq = Sequencer {
+        Sequencer {
             midi,
 
             tick: 0,
@@ -87,10 +87,7 @@ impl<'a> Sequencer<'a> {
             progression,
 
             events: EventEmitter::new().unwrap(),
-        };
-
-        seq.gen_progression().unwrap();
-        seq
+        }
     }
 
     pub fn has_loop(&self) -> bool {
