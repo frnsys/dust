@@ -1,6 +1,14 @@
 MIDI output: Only tested with Bitwig, but should work with any DAW. See setup instructions below.
 
-## Bitwig MIDI setup
+## Setup
+
+### Chord patterns
+
+By default `dust` looks for a yaml file with chord patterns at `~/.config/dust/patterns.yaml`.
+
+See below for more on chord progression patterns.
+
+### Bitwig Studio MIDI
 
 1. Setup virtual MIDI ports with `sudo modprobe snd_virmidi`
     - To have this automatically load on boot, edit `/etc/modules` and add `snd-virmidi`

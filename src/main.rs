@@ -5,9 +5,8 @@ mod midi;
 mod progression;
 
 use clap::{Parser, ValueHint};
-use std::{fs::File, path::PathBuf};
-use std::io::BufReader;
-use std::io;
+use std::{fs::File, path::{Path, PathBuf}, env};
+use std::{io, io::BufReader};
 use app::{App, run_app};
 use anyhow::Result;
 use crossterm::{
@@ -24,8 +23,8 @@ use progression::ProgressionTemplate;
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
 struct Args {
-    #[clap(short, long, default_value = "patterns.yaml", value_hint = ValueHint::FilePath)]
-    patterns: PathBuf,
+    #[clap(short, long, value_hint = ValueHint::FilePath)]
+    patterns: Option<PathBuf>,
 
     #[clap(short, long, default_value = "/tmp/", value_hint = ValueHint::DirPath)]
     save_dir: String,
@@ -33,7 +32,14 @@ struct Args {
 
 fn main() -> Result<()> {
     let args = Args::parse();
-    let file = File::open(args.patterns).expect("could not open file");
+    let path = match args.patterns {
+        Some(p) => p,
+        None => {
+            let home = env::var("HOME").unwrap();
+            Path::new(&home).join(".config/dust/patterns.yaml")
+        }
+    };
+    let file = File::open(path).expect("could not open file");
     let reader = BufReader::new(file);
     let mut template: ProgressionTemplate = serde_yaml::from_reader(reader).expect("error while reading yaml");
     template.update_transitions();
