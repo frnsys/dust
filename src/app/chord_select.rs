@@ -98,6 +98,8 @@ impl<'a> ChordSelect<'a> {
                     6
                 };
                 self.set_numeral(numeral);
+
+                let cs = &self.select.choices[0];
                 self.text_input.set_input(cs.to_string());
                 Ok((None, false))
             }
@@ -108,6 +110,7 @@ impl<'a> ChordSelect<'a> {
                     0
                 };
                 self.set_numeral(numeral);
+                let cs = &self.select.choices[0];
                 self.text_input.set_input(cs.to_string());
                 Ok((None, false))
             }
