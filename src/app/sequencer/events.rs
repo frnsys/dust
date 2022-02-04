@@ -1,13 +1,15 @@
 use kira::{
     Tempo,
     Duration,
-    sound::SoundSettings,
 	instance::InstanceSettings,
+    sound::{Sound, SoundSettings},
 	manager::{AudioManager, AudioManagerSettings},
     metronome::{MetronomeSettings, handle::MetronomeHandle},
     sequence::{Sequence, SequenceSettings, SequenceInstanceSettings, handle::SequenceInstanceHandle},
 };
 use anyhow::Result;
+
+const METRONOME_SOUND: &[u8; 61424] = include_bytes!("../../../samples/metronome.wav");
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
 pub enum Event {}
@@ -83,7 +85,8 @@ impl EventEmitter {
             MetronomeSettings::new().tempo(tempo).interval_events_to_emit(ticks))?;
 
         // The sequence that actually emits metronome tick sounds
-        let metronome_sound = self.manager.load_sound("samples/metronome.wav", SoundSettings::default())?;
+        let sound = Sound::from_wav_reader(&METRONOME_SOUND[..], SoundSettings::default())?;
+        let metronome_sound = self.manager.add_sound(sound)?;
         let tick_sequence_handle = self.manager.start_sequence::<Event>(
             {
                 let mut sequence = Sequence::new(SequenceSettings::default());
