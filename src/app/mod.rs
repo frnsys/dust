@@ -50,6 +50,10 @@ impl<'a> App<'a> {
             performance: Performance::new(midi.clone(), save_dir),
         }
     }
+
+    pub fn shutdown(&mut self) -> Result<()> {
+        self.midi.borrow_mut().shutdown()
+    }
 }
 
 pub fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> Result<()> {
@@ -141,6 +145,7 @@ pub fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> Result<(
                             match key.code {
                                 // Quit
                                 KeyCode::Char('Q') => {
+                                    app.shutdown().unwrap();
                                     return Ok(());
                                 },
 

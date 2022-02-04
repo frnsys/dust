@@ -147,12 +147,15 @@ impl MIDI {
         });
     }
 
-    pub fn close(&mut self) -> Result<()> {
+    pub fn shutdown(&mut self) -> Result<()> {
         let conn = self.conn.clone();
         let mut conn = conn.lock().unwrap();
-        let conn = conn.take();
-        if let Some(conn) = conn {
-            conn.close();
+
+        if let Some(ref mut conn) = *conn {
+            let note_owners = self.note_owners.lock().unwrap();
+            for note in note_owners.keys() {
+                let _ = conn.send(&[NOTE_OFF_MSG, *note, VELOCITY]);
+            }
         }
         Ok(())
     }
