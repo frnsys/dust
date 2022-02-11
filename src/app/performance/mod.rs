@@ -4,7 +4,7 @@ use std::{sync::Arc, cell::RefCell};
 use crate::file::save_to_midi_file;
 use crate::app::text_input::TextInput;
 use crate::app::chord_select::ChordSelect;
-use crate::core::{Key, ChordSpec};
+use crate::core::{Key, ChordSpec, ChordParseError};
 use crossterm::event::{KeyEvent, KeyCode, KeyModifiers};
 use tui::{
     widgets::Paragraph,
@@ -22,6 +22,7 @@ enum InputMode<'a> {
 enum TextTarget {
     Root,
     Duration,
+    Progression,
     Export,
 }
 
@@ -129,6 +130,17 @@ impl<'a> Performance<'a> {
                             TextTarget::Duration => {
                                 self.note_duration = input.parse::<u64>()?;
                             }
+                            TextTarget::Progression => {
+                                let mappings: Result<Vec<ChordSpec>, ChordParseError> = input.split_whitespace()
+                                    .take(9).map(|cs_str| cs_str.try_into()).collect();
+                                if let Ok(chord_specs) = mappings {
+                                    for (i, cs) in chord_specs.into_iter().enumerate() {
+                                        self.mappings[i] = Some(cs);
+                                    }
+                                } else {
+                                    self.message = "Invalid chord";
+                                }
+                            }
                             TextTarget::Export => {
                                 let chords = self.mappings.iter().map(|m| {
                                     match m {
@@ -224,6 +236,13 @@ impl<'a> Performance<'a> {
                             TextTarget::Duration);
                     }
 
+                    // Enter a progression, space-delimited
+                    KeyCode::Char('p') => {
+                        self.input_mode = InputMode::Text(
+                            TextInput::new("Progression: ", |_c: char| true),
+                            TextTarget::Progression);
+                    }
+
                     // Start export to MIDI flow
                     KeyCode::Char('E') => {
                         let mut text_input = TextInput::new("Path: ", |_c: char| true);
@@ -258,6 +277,7 @@ impl<'a> Performance<'a> {
             Span::styled(self.key.root.to_string(), param_style),
             Span::raw(" [d]uration:"),
             Span::styled(self.note_duration.to_string(), param_style),
+            Span::raw(" [p]rogression"),
             Span::raw(" [E]xport"),
         ];
         controls
