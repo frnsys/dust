@@ -191,6 +191,7 @@ impl<'a> Sequencer<'a> {
 
         let message = match &self.input_mode {
             InputMode::Text(ti, _) => ti.render(),
+            InputMode::Chord(select, _) => select.text_input.render(),
             _ => Paragraph::new(self.message)
                 .alignment(Alignment::Right)
         };
@@ -303,6 +304,7 @@ impl<'a> Sequencer<'a> {
                 match key.code {
                     // Change tempo
                     KeyCode::Char('t') => {
+                        self.message = "";
                         self.input_mode = InputMode::Text(
                             TextInput::new("Tempo: ", |c: char| c.is_numeric()),
                             TextTarget::Tempo);
@@ -310,6 +312,7 @@ impl<'a> Sequencer<'a> {
 
                     // Change bars
                     KeyCode::Char('b') => {
+                        self.message = "";
                         self.input_mode = InputMode::Text(
                             TextInput::new("Bars: ", |c: char| c.is_numeric()),
                             TextTarget::Bars);
@@ -317,6 +320,7 @@ impl<'a> Sequencer<'a> {
 
                     // Change root
                     KeyCode::Char('r') => {
+                        self.message = "";
                         self.input_mode = InputMode::Text(
                             TextInput::new("Root: ", |c: char| c.is_alphanumeric()),
                             TextTarget::Root);
@@ -324,6 +328,7 @@ impl<'a> Sequencer<'a> {
 
                     // Change duration
                     KeyCode::Char('d') => {
+                        self.message = "";
                         self.input_mode = InputMode::Text(
                             TextInput::new("Duration: ", |c: char| c.is_numeric()),
                             TextTarget::Duration);
@@ -356,6 +361,7 @@ impl<'a> Sequencer<'a> {
                     // Generate a new progression with
                     // a seed chord
                     KeyCode::Char('S') => {
+                        self.message = "";
                         self.input_mode = InputMode::Chord(
                             ChordSelect::default(), ChordTarget::Seed);
                     }
@@ -367,6 +373,7 @@ impl<'a> Sequencer<'a> {
 
                     // Start export to MIDI flow
                     KeyCode::Char('E') => {
+                        self.message = "";
                         let mut text_input = TextInput::new("Path: ", |_c: char| true);
                         text_input.set_input(self.save_dir.to_string());
                         self.input_mode = InputMode::Text(
