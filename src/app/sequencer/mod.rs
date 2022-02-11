@@ -73,7 +73,7 @@ impl<'a> Sequencer<'a> {
 
             tick: 0,
             seq_pos: (0, 0),
-            clip: (0, 0),
+            clip: (0, progression.sequence.len()),
 
             save_dir,
             message: "",
@@ -327,7 +327,7 @@ impl<'a> Sequencer<'a> {
                     }
 
                     // Change duration
-                    KeyCode::Char('d') => {
+                    KeyCode::Char('u') => {
                         self.message = "";
                         self.input_mode = InputMode::Text(
                             TextInput::new("Duration: ", |c: char| c.is_numeric()),
@@ -410,7 +410,7 @@ impl<'a> Sequencer<'a> {
         let mut controls = vec![
             Span::raw("[r]oot:"),
             Span::styled(self.key.root.to_string(), param_style),
-            Span::raw(" [d]uration:"),
+            Span::raw(" d[u]ration:"),
             Span::styled(self.note_duration.to_string(), param_style),
             Span::raw(" [b]ars:"),
             Span::styled(self.bars.to_string(), param_style),

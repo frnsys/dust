@@ -154,7 +154,7 @@ pub fn process_input(seq: &mut Sequencer, key: KeyEvent) -> Result<()> {
         }
 
         // Delete chord under cursor
-        KeyCode::Char('x') => {
+        KeyCode::Char('d') => {
             match sel_item {
                 None => {},
                 Some(_) => {
@@ -173,7 +173,7 @@ pub fn controls<'a>(seq: &Sequencer) -> Vec<Span<'a>> {
         Span::raw(" [e]dit"),
     ];
     if sel_item.is_some() {
-        controls.push(Span::raw(" [x]delete"));
+        controls.push(Span::raw(" [d]elete"));
     }
 
     controls.push(Span::raw(" loop:[A]-[B]"));

@@ -230,7 +230,7 @@ impl<'a> Performance<'a> {
                     }
 
                     // Change duration
-                    KeyCode::Char('d') => {
+                    KeyCode::Char('u') => {
                         self.input_mode = InputMode::Text(
                             TextInput::new("Duration: ", |c: char| c.is_numeric()),
                             TextTarget::Duration);
@@ -275,7 +275,7 @@ impl<'a> Performance<'a> {
         let controls = vec![
             Span::raw("[r]oot:"),
             Span::styled(self.key.root.to_string(), param_style),
-            Span::raw(" [d]uration:"),
+            Span::raw(" d[u]ration:"),
             Span::styled(self.note_duration.to_string(), param_style),
             Span::raw(" [p]rogression"),
             Span::raw(" [E]xport"),
