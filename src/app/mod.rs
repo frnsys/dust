@@ -24,7 +24,7 @@ use sequencer::Sequencer;
 use performance::Performance;
 use crossterm::event::{self, Event, KeyCode};
 
-const TICK_RATE: Duration = Duration::from_millis(200);
+const TICK_RATE: Duration = Duration::from_millis(100);
 
 pub enum Mode {
     Sequencer,
