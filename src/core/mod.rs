@@ -1,6 +1,7 @@
 mod key;
 mod note;
 mod chord;
+mod degree;
 mod interval;
 
 pub use note::Note;

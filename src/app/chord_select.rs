@@ -60,7 +60,7 @@ impl<'a> ChordSelect<'a> {
     pub fn with_chord(cs: &ChordSpec) -> ChordSelect<'a> {
         let cs_str = cs.to_string();
         let mut sel = ChordSelect::default();
-        sel.set_numeral(cs.degree - 1);
+        sel.set_numeral(cs.root.degree - 1);
         let idx = match sel.select.choices.iter().position(|cs| cs == &cs_str) {
             Some(idx) => idx,
             None => 0,

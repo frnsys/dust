@@ -3,6 +3,7 @@ use thiserror::Error;
 use std::{fmt, str::FromStr};
 use super::note::Note;
 use super::interval::Interval;
+use super::degree::{Degree, DegreeParseError};
 use super::key::{Key, Mode, MAJOR, MINOR};
 use lazy_static::lazy_static;
 
@@ -12,7 +13,6 @@ lazy_static! {
     static ref CHORD_RE: Regex = Regex::new(
         r"^([IV]+|[iv]+)([b#])*([+-^_5])?(:([b#]?\d+,?)*)?(/([b#]?\d+)|(%([b#]?\d+)))?(>\d+)?(<\d+)?(~([IV]+|[iv]+))?$")
         .unwrap();
-    static ref EXT_RE: Regex = Regex::new(r"^([b#]*)(\d+)$").unwrap();
 }
 
 fn numeral_to_index(numeral: &str) -> Option<usize> {
@@ -29,60 +29,6 @@ fn numeral_to_mode(numeral: &str) -> Result<Mode, ChordParseError>{
     }
 }
 
-#[derive(Debug, Clone, Eq, PartialEq)]
-struct Extension {
-    degree: usize,
-    adj: isize
-}
-
-impl Extension {
-    pub fn to_interval(&self, mode: &Mode) -> isize {
-        // Convert from 1-indexed to 0-indexed degrees
-        let degree_0 = self.degree - 1;
-        let octaves = (degree_0/8 * 12) as isize;
-        (match mode {
-            Mode::Major => MAJOR[degree_0 % 7],
-            Mode::Minor => MINOR[degree_0 % 7]
-        } as isize) + octaves + self.adj
-    }
-}
-
-impl FromStr for Extension {
-    type Err = ChordParseError;
-
-    /// Parses a chord extension, e.g. "7", "b7", "#9", "bb7"
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let caps = EXT_RE.captures(s).ok_or(ChordParseError::InvalidExtension(s.to_string()))?;
-        let adjustments = caps.get(1).and_then(|m| Some(m.as_str())).unwrap_or_default();
-        let degree = caps.get(2)
-            .ok_or(ChordParseError::InvalidExtension("(none)".to_string()))?
-            .as_str().parse::<usize>()?;
-        let adj = adjustments.matches('#').count() as isize - adjustments.matches('b').count() as isize;
-        Ok(Extension { degree, adj })
-
-    }
-}
-
-impl TryFrom<&str> for Extension {
-    type Error = ChordParseError;
-    fn try_from(s: &str) -> Result<Self, Self::Error> {
-        Ok(Self::from_str(s)?)
-    }
-}
-
-impl fmt::Display for Extension {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let mut s = "".to_string();
-        let count = self.adj.abs() as usize;
-        if self.adj < 0 {
-            s.push_str(&std::iter::repeat("b").take(count).collect::<String>());
-        } else if self.adj > 0 {
-            s.push_str(&std::iter::repeat("#").take(count).collect::<String>());
-        }
-        write!(f, "{}{}", s, self.degree)
-    }
-}
-
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub enum Triad {
     Mode,
@@ -95,12 +41,11 @@ pub enum Triad {
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct ChordSpec {
-    pub degree: usize,
-    adj: isize,
+    pub root: Degree,
     mode: Mode,
     triad: Triad,
-    extensions: Vec<Extension>,
-    bass_degree: Option<Extension>,
+    extensions: Vec<Degree>,
+    bass_degree: Option<Degree>,
     inversion: usize,
     rel_key: Option<(usize, Mode)>,
 }
@@ -108,9 +53,11 @@ pub struct ChordSpec {
 impl ChordSpec {
     pub fn new(degree: usize, mode: Mode) -> ChordSpec {
         ChordSpec {
-            degree,
+            root: Degree {
+                degree,
+                adj: 0,
+            },
             mode,
-            adj: 0,
             triad: Triad::Mode,
             extensions: vec![],
             bass_degree: None,
@@ -140,13 +87,13 @@ impl ChordSpec {
     /// cs.add(7, 1)
     /// ```
     pub fn add(mut self, degree: usize, adj: isize) -> ChordSpec {
-        self.extensions.push(Extension { degree, adj });
+        self.extensions.push(Degree { degree, adj });
         self
     }
 
     /// Set the bass degree
     pub fn bass(mut self, degree: usize, adj: isize) -> ChordSpec {
-        self.bass_degree = Some(Extension { degree, adj });
+        self.bass_degree = Some(Degree { degree, adj });
         self
     }
 
@@ -158,13 +105,13 @@ impl ChordSpec {
 
     /// Sets an semitone adjustment, for chromatic roots
     pub fn adj(mut self, adj: isize) -> ChordSpec {
-        self.adj = adj;
+        self.root.adj = adj;
         self
     }
 
     /// Shift by a number of octaves
     pub fn shift(mut self, octaves: isize) -> ChordSpec {
-        self.adj += octaves * 12;
+        self.root.adj += octaves * 12;
         self
     }
 
@@ -174,6 +121,17 @@ impl ChordSpec {
         self
     }
 
+    /// Get all possible inversions
+    pub fn inversions(&self) -> Vec<ChordSpec> {
+        self.intervals().iter().map(|intv| {
+            let cs = self.clone();
+            let intv = Interval { semitones: *intv };
+            let deg = intv.to_degree(&self.mode);
+            cs.bass(deg.degree, deg.adj)
+        }).collect()
+    }
+
+    /// The actual intervals that make up this chord
     pub fn intervals(&self) -> Vec<isize> {
         let offset = match self.rel_key {
             None => 0,
@@ -183,7 +141,7 @@ impl ChordSpec {
                     Mode::Minor => MINOR[degree - 1 % 7]
                 }
             }
-        } as isize + self.adj;
+        } as isize;
 
         let mode = match self.rel_key {
             None => self.mode,
@@ -244,7 +202,7 @@ impl ChordSpec {
     /// Resolve the chord spec into actual semitones
     /// for the given key.
     pub fn chord_for_key(&self, key: &Key) -> Chord {
-        let root = key.note(self.degree);
+        let root = key.note(&self.root);
         Chord::new(root, self.intervals())
     }
 }
@@ -260,13 +218,13 @@ pub enum ChordParseError {
     #[error("Invalid triad symbol `{0}`")]
     InvalidTriadSymbol(String),
 
-    #[error("Invalid extension `{0}`")]
-    InvalidExtension(String),
-
     #[error("Invalid relative key `{0}`")]
     InvalidRelKey(String),
 
     #[error("Couldn't parse extension")]
+    InvalidExtension(#[from] DegreeParseError),
+
+    #[error("Couldn't parse integer")]
     ParseIntError(#[from] std::num::ParseIntError),
 }
 
@@ -321,7 +279,7 @@ impl FromStr for ChordSpec {
             None => Ok(Triad::Mode)
         }?;
 
-        let exts: Vec<Extension> = if let Some(exts) = exts {
+        let exts: Vec<Degree> = if let Some(exts) = exts {
             exts[1..].split(",")
                 .filter(|&n| !n.is_empty())
                 .map(|n| n.try_into()).collect::<Result<Vec<_>, _>>()?
@@ -355,8 +313,10 @@ impl FromStr for ChordSpec {
 
             Ok(ChordSpec {
                 // Convert to 1-indexed degrees
-                degree: degree_0 + 1,
-                adj,
+                root: Degree {
+                    degree: degree_0 + 1,
+                    adj,
+                },
                 triad,
                 mode,
                 extensions: exts,
@@ -389,18 +349,18 @@ impl fmt::Display for ChordSpec {
         let mut name = "".to_string();
 
         // Convert 1-indexed degree to 0-indexed
-        let mut numeral = NUMERALS[(self.degree - 1) % 7].to_string();
+        let mut numeral = NUMERALS[(self.root.degree - 1) % 7].to_string();
         if self.mode == Mode::Minor || self.triad == Triad::Diminished {
             numeral = numeral.to_lowercase();
         }
         name.push_str(&numeral);
 
-        let count = self.adj.abs() as usize;
+        let count = self.root.adj.abs() as usize;
         let octaves = count/12;
         let rem = count.rem_euclid(12);
-        if self.adj < 0 {
+        if self.root.adj < 0 {
             name.push_str(&std::iter::repeat("b").take(rem).collect::<String>());
-        } else if self.adj > 0 {
+        } else if self.root.adj > 0 {
             name.push_str(&std::iter::repeat("#").take(rem).collect::<String>());
         }
 
@@ -433,9 +393,9 @@ impl fmt::Display for ChordSpec {
 
 
         if octaves != 0 {
-            if self.adj < 0 {
+            if self.root.adj < 0 {
                 name.push_str(&format!("<{}", octaves));
-            } else if self.adj > 0 {
+            } else if self.root.adj > 0 {
                 name.push_str(&format!(">{}", octaves));
             }
         }
@@ -478,6 +438,14 @@ impl Chord {
 
     pub fn describe_notes(&self) -> Vec<String> {
         self.notes().iter().map(|n| n.to_string()).collect()
+    }
+}
+
+impl fmt::Display for Chord {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let notes: Vec<String> = self.notes()
+            .iter().map(|n| n.to_string()).collect();
+        write!(f, "{}", notes.join("-"))
     }
 }
 
@@ -762,24 +730,6 @@ mod test {
     }
 
     #[test]
-    fn test_parse_extension() {
-        let ext: Extension = "7".try_into().unwrap();
-        assert_eq!(ext, Extension {degree: 7, adj: 0});
-
-        let ext: Extension = "b7".try_into().unwrap();
-        assert_eq!(ext, Extension {degree: 7, adj: -1});
-
-        let ext: Extension = "bb7".try_into().unwrap();
-        assert_eq!(ext, Extension {degree: 7, adj: -2});
-
-        let ext: Extension = "#7".try_into().unwrap();
-        assert_eq!(ext, Extension {degree: 7, adj: 1});
-
-        let ext: Extension = "b#7".try_into().unwrap();
-        assert_eq!(ext, Extension {degree: 7, adj: 0});
-    }
-
-    #[test]
     fn test_chord_inversions() {
         let key = Key {
             root: "C3".try_into().unwrap(),
@@ -819,6 +769,20 @@ mod test {
         let notes: Vec<String> = chord.notes()
             .iter().map(|n| n.to_string()).collect();
         assert_eq!(notes, vec!["G3", "C4", "E4"]);
+
+        // Iterate over inversions
+        let expected = vec![
+            vec!["C3", "E3", "G3"],
+            vec!["E3", "G3", "C4"],
+            vec!["G3", "C4", "E4"],
+        ];
+        let cs: ChordSpec = "I".try_into().unwrap();
+        for (inv, exp) in cs.inversions().iter().zip(expected) {
+            let chord = inv.chord_for_key(&key);
+            let notes: Vec<String> = chord.notes()
+                .iter().map(|n| n.to_string()).collect();
+            assert_eq!(notes, exp);
+        }
     }
 
     #[test]

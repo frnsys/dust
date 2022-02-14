@@ -1,5 +1,8 @@
 use thiserror::Error;
+use super::key::Mode;
+use super::degree::Degree;
 use std::{fmt, str::FromStr};
+use lazy_static::lazy_static;
 
 const NAMES: [&str; 12] = [
     "P1",
@@ -16,9 +19,34 @@ const NAMES: [&str; 12] = [
     "M7",
 ];
 
+lazy_static! {
+    pub static ref MAJ_DEGS: Vec<Degree> = {
+        let ds: [&str; 12] = [
+            "1", "b2", "2", "b3", "3", "4",
+            "b5", "5", "b6", "6", "b7", "7"];
+        ds.iter().map(|d| (*d).try_into().unwrap()).collect()
+    };
+    pub static ref MIN_DEGS: Vec<Degree> = {
+        let ds: [&str; 12] = [
+            "1", "2", "b3", "3", "b4", "4",
+            "b5", "5", "6", "b7", "7", "#7"];
+        ds.iter().map(|d| (*d).try_into().unwrap()).collect()
+    };
+}
+
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub struct Interval {
     pub semitones: isize
+}
+
+impl Interval {
+    pub fn to_degree(&self, mode: &Mode) -> Degree {
+        let idx = self.semitones.rem_euclid(12) as usize;
+        match mode {
+            Mode::Major => MAJ_DEGS[idx].clone(),
+            Mode::Minor => MIN_DEGS[idx].clone()
+        }
+    }
 }
 
 impl fmt::Display for Interval {
@@ -108,5 +136,97 @@ mod test {
 
         let intv: Interval = "M3".try_into().unwrap();
         assert_eq!(intv, Interval { semitones: 4 });
+    }
+
+    #[test]
+    fn test_to_degree_major() {
+        let mode = Mode::Major;
+        let intv = Interval { semitones: 0 };
+        assert_eq!(intv.to_degree(&mode), Degree { degree: 1, adj: 0 });
+
+        let intv = Interval { semitones: 1 };
+        assert_eq!(intv.to_degree(&mode), Degree { degree: 2, adj: -1 });
+
+        let intv = Interval { semitones: 2 };
+        assert_eq!(intv.to_degree(&mode), Degree { degree: 2, adj: 0 });
+
+        let intv = Interval { semitones: 3 };
+        assert_eq!(intv.to_degree(&mode), Degree { degree: 3, adj: -1 });
+
+        let intv = Interval { semitones: 4 };
+        assert_eq!(intv.to_degree(&mode), Degree { degree: 3, adj: 0 });
+
+        let intv = Interval { semitones: 5 };
+        assert_eq!(intv.to_degree(&mode), Degree { degree: 4, adj: 0 });
+
+        let intv = Interval { semitones: 6 };
+        assert_eq!(intv.to_degree(&mode), Degree { degree: 5, adj: -1 });
+
+        let intv = Interval { semitones: 7 };
+        assert_eq!(intv.to_degree(&mode), Degree { degree: 5, adj: 0 });
+
+        let intv = Interval { semitones: 8 };
+        assert_eq!(intv.to_degree(&mode), Degree { degree: 6, adj: -1 });
+
+        let intv = Interval { semitones: 9 };
+        assert_eq!(intv.to_degree(&mode), Degree { degree: 6, adj: 0 });
+
+        let intv = Interval { semitones: 10 };
+        assert_eq!(intv.to_degree(&mode), Degree { degree: 7, adj: -1 });
+
+        let intv = Interval { semitones: 11 };
+        assert_eq!(intv.to_degree(&mode), Degree { degree: 7, adj: 0 });
+
+        let intv = Interval { semitones: 12 };
+        assert_eq!(intv.to_degree(&mode), Degree { degree: 1, adj: 0 });
+
+        let intv = Interval { semitones: -12 };
+        assert_eq!(intv.to_degree(&mode), Degree { degree: 1, adj: 0 });
+    }
+
+    #[test]
+    fn test_to_degree_minor() {
+        let mode = Mode::Minor;
+        let intv = Interval { semitones: 0 };
+        assert_eq!(intv.to_degree(&mode), Degree { degree: 1, adj: 0 });
+
+        let intv = Interval { semitones: 1 };
+        assert_eq!(intv.to_degree(&mode), Degree { degree: 2, adj: 0 });
+
+        let intv = Interval { semitones: 2 };
+        assert_eq!(intv.to_degree(&mode), Degree { degree: 3, adj: -1 });
+
+        let intv = Interval { semitones: 3 };
+        assert_eq!(intv.to_degree(&mode), Degree { degree: 3, adj: 0 });
+
+        let intv = Interval { semitones: 4 };
+        assert_eq!(intv.to_degree(&mode), Degree { degree: 4, adj: -1 });
+
+        let intv = Interval { semitones: 5 };
+        assert_eq!(intv.to_degree(&mode), Degree { degree: 4, adj: 0 });
+
+        let intv = Interval { semitones: 6 };
+        assert_eq!(intv.to_degree(&mode), Degree { degree: 5, adj: -1 });
+
+        let intv = Interval { semitones: 7 };
+        assert_eq!(intv.to_degree(&mode), Degree { degree: 5, adj: 0 });
+
+        let intv = Interval { semitones: 8 };
+        assert_eq!(intv.to_degree(&mode), Degree { degree: 6, adj: 0 });
+
+        let intv = Interval { semitones: 9 };
+        assert_eq!(intv.to_degree(&mode), Degree { degree: 7, adj: -1 });
+
+        let intv = Interval { semitones: 10 };
+        assert_eq!(intv.to_degree(&mode), Degree { degree: 7, adj: 0 });
+
+        let intv = Interval { semitones: 11 };
+        assert_eq!(intv.to_degree(&mode), Degree { degree: 7, adj: 1 });
+
+        let intv = Interval { semitones: 12 };
+        assert_eq!(intv.to_degree(&mode), Degree { degree: 1, adj: 0 });
+
+        let intv = Interval { semitones: -12 };
+        assert_eq!(intv.to_degree(&mode), Degree { degree: 1, adj: 0 });
     }
 }
