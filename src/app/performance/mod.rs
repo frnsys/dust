@@ -4,7 +4,7 @@ use std::{sync::Arc, cell::RefCell};
 use crate::file::save_to_midi_file;
 use crate::app::text_input::TextInput;
 use crate::app::chord_select::ChordSelect;
-use crate::core::{Key, ChordSpec, ChordParseError};
+use crate::core::{Key, Mode, ChordSpec, ChordParseError, voice_lead};
 use crossterm::event::{KeyEvent, KeyCode, KeyModifiers};
 use tui::{
     widgets::Paragraph,
@@ -236,11 +236,32 @@ impl<'a> Performance<'a> {
                             TextTarget::Duration);
                     }
 
+                    // Change mode
+                    KeyCode::Char('m') => {
+                        self.key.mode = match self.key.mode {
+                            Mode::Major => Mode::Minor,
+                            Mode::Minor => Mode::Major,
+                        };
+                    }
+
                     // Enter a progression, space-delimited
                     KeyCode::Char('p') => {
                         self.input_mode = InputMode::Text(
                             TextInput::new("Progression: ", |_c: char| true),
                             TextTarget::Progression);
+                    }
+
+                    // Apply voice leading algorithm to progression
+                    KeyCode::Char('v') => {
+                        // Kind of messy
+                        let cses = self.mappings.iter().flatten().cloned().collect();
+                        let mut vl_prog = voice_lead(&cses);
+                        for maybe_cs in self.mappings.iter_mut() {
+                            *maybe_cs = match maybe_cs {
+                                Some(_) => Some(vl_prog.remove(0)),
+                                None => None
+                            }
+                        }
                     }
 
                     // Start export to MIDI flow
@@ -277,7 +298,10 @@ impl<'a> Performance<'a> {
             Span::styled(self.key.root.to_string(), param_style),
             Span::raw(" d[u]ration:"),
             Span::styled(self.note_duration.to_string(), param_style),
+            Span::raw(" [m]ode:"),
+            Span::styled(self.key.mode.to_string(), param_style),
             Span::raw(" [p]rogression"),
+            Span::raw(" [v]oice-lead"),
             Span::raw(" [E]xport"),
         ];
         controls

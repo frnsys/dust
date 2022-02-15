@@ -1,6 +1,6 @@
 mod template;
 
-use crate::core::{Key, ChordSpec, Chord};
+use crate::core::{Key, ChordSpec, Chord, voice_lead};
 pub use template::{ProgressionTemplate, ModeTemplate};
 
 pub struct Progression {
@@ -90,10 +90,65 @@ impl Progression {
         }
         chord_idx
     }
+
+    pub fn voice_lead(&self) -> Progression {
+        let mut prog = Progression{
+            bars: self.bars.clone(),
+            time_unit: self.time_unit.clone(),
+            chord_index: self.chord_index.clone(),
+            sequence: self.sequence.clone()
+        };
+        if self.chord_index.is_empty() {
+            prog
+        } else {
+            // Kind of messy, is there a cleaner way?
+            let chords = self.chords().into_iter().cloned().collect();
+            for (i, chord) in voice_lead(&chords).into_iter().enumerate() {
+                prog.set_chord(i, chord);
+            }
+            prog
+        }
+    }
 }
 
 fn index_chords(seq: &Vec<Option<ChordSpec>>) -> Vec<usize> {
     seq.iter().enumerate()
         .filter_map(|(i, cs)| cs.as_ref().and(Some(i)))
         .collect()
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use crate::core::Mode;
+
+    #[test]
+    fn test_voice_leading() {
+        let prog = Progression::new(
+            vec![
+                None,
+                Some("i".try_into().unwrap()),
+                Some("VI".try_into().unwrap()),
+                Some("III".try_into().unwrap()),
+                Some("v".try_into().unwrap()),
+            ],
+            4,
+            4./8.,
+        );
+        let vl_prog = prog.voice_lead();
+        let key = Key {
+            root: "A3".try_into().unwrap(),
+            mode: Mode::Minor,
+        };
+        let expected = vec![
+            "A3-C4-E4",
+            "A3-C4-F4",
+            "G3-C4-E4",
+            "G3-B3-E4"
+        ];
+        for (cs, ex) in vl_prog.chords().iter().zip(expected) {
+            let chord = cs.chord_for_key(&key).to_string();
+            assert_eq!(ex, chord);
+        }
+    }
 }

@@ -131,7 +131,8 @@ impl ChordSpec {
         }).collect()
     }
 
-    /// The actual intervals that make up this chord
+    /// The actual intervals that make up this chord,
+    /// relative to the chord's root
     pub fn intervals(&self) -> Vec<isize> {
         let offset = match self.rel_key {
             None => 0,
@@ -199,11 +200,42 @@ impl ChordSpec {
         intervals.iter().map(|intv| offset + *intv).collect()
     }
 
+    /// The chord's intervals
+    /// relative to the *key's* root
+    pub fn intervals_from_key_root(&self) -> Vec<isize> {
+        let offset = self.root.to_interval(&self.mode);
+        self.intervals().iter().map(|intv| intv + offset).collect()
+    }
+
     /// Resolve the chord spec into actual semitones
     /// for the given key.
     pub fn chord_for_key(&self, key: &Key) -> Chord {
         let root = key.note(&self.root);
         Chord::new(root, self.intervals())
+    }
+
+    /// Calculate the "distance" to another chord,
+    /// i.e. the minimum amount of semitones movement
+    /// or difference between the chords
+    pub fn distance(&self, cs: &ChordSpec) -> usize {
+        let intvs_a = self.intervals_from_key_root();
+        let mut intvs_b = cs.intervals_from_key_root();
+
+        let mut dist = 0;
+        for a in &intvs_a {
+            // Find the closest note to this note
+            // and claim it.
+            // This represents a finger moving
+            // from note A to note B.
+            let (idx, d) = intvs_b.iter()
+                .map(|intv| (a-intv).abs())
+                .enumerate()
+                .min_by_key(|(_, dist)| *dist)
+                .unwrap();
+            intvs_b.remove(idx);
+            dist += d;
+        }
+        dist as usize
     }
 }
 
@@ -446,6 +478,29 @@ impl fmt::Display for Chord {
         let notes: Vec<String> = self.notes()
             .iter().map(|n| n.to_string()).collect();
         write!(f, "{}", notes.join("-"))
+    }
+}
+
+
+pub fn voice_lead(chords: &Vec<ChordSpec>) -> Vec<ChordSpec> {
+    if chords.is_empty() {
+        vec![]
+    } else {
+        let mut res = vec![chords[0].clone()];
+        for cs in &chords[1..] {
+            let last_chord = &res[res.len() - 1];
+
+            // Search this and adjacent octaves
+            let cands = (-1..1).flat_map(|shift| {
+                cs.clone().shift(shift).inversions()
+            });
+            let best = cands.into_iter()
+                .min_by_key(|inv| {
+                    inv.distance(&last_chord)
+                }).unwrap();
+            res.push(best);
+        }
+        res
     }
 }
 
@@ -830,4 +885,77 @@ mod test {
             .iter().map(|n| n.to_string()).collect();
         assert_eq!(notes, vec!["C2", "D2", "E2", "G2"]);
     }
+
+    #[test]
+    fn test_chord_distances() {
+        let key = Key {
+            root: "C3".try_into().unwrap(),
+            mode: Mode::Major,
+        };
+
+        let cs: ChordSpec = "I".try_into().unwrap();
+
+        // Dist to same chord should be 0.
+        let other: ChordSpec = "I".try_into().unwrap();
+        let dist = cs.distance(&other);
+        assert_eq!(dist, 0);
+
+        // For reference
+        let chord = other.chord_for_key(&key);
+        let notes: Vec<String> = chord.notes()
+            .iter().map(|n| n.to_string()).collect();
+        assert_eq!(notes, vec!["C3", "E3", "G3"]);
+
+        // Inversions
+        let other: ChordSpec = "IV".try_into().unwrap();
+        let dist_0 = cs.distance(&other);
+        let chord = other.chord_for_key(&key);
+        let notes: Vec<String> = chord.notes()
+            .iter().map(|n| n.to_string()).collect();
+        assert_eq!(notes, vec!["F3", "A3", "C4"]);
+
+        let other: ChordSpec = "IV%1<1".try_into().unwrap();
+        let dist_1 = cs.distance(&other);
+        let chord = other.chord_for_key(&key);
+        let notes: Vec<String> = chord.notes()
+            .iter().map(|n| n.to_string()).collect();
+        assert_eq!(notes, vec!["A2", "C3", "F3"]);
+
+        let other: ChordSpec = "IV%2<1".try_into().unwrap();
+        let dist_2 = cs.distance(&other);
+        let chord = other.chord_for_key(&key);
+        let notes: Vec<String> = chord.notes()
+            .iter().map(|n| n.to_string()).collect();
+        assert_eq!(notes, vec!["C3", "F3", "A3"]);
+
+        assert!(dist_0 > dist_1);
+        assert!(dist_0 > dist_2);
+        assert!(dist_1 > dist_2);
+    }
+
+    #[test]
+    fn test_voice_leading() {
+        let prog = vec![
+            "i".try_into().unwrap(),
+            "VI".try_into().unwrap(),
+            "III".try_into().unwrap(),
+            "v".try_into().unwrap(),
+        ];
+        let vl_prog = voice_lead(&prog);
+        let key = Key {
+            root: "A3".try_into().unwrap(),
+            mode: Mode::Minor,
+        };
+        let expected = vec![
+            "A3-C4-E4",
+            "A3-C4-F4",
+            "G3-C4-E4",
+            "G3-B3-E4"
+        ];
+        for (cs, ex) in vl_prog.iter().zip(expected) {
+            let chord = cs.chord_for_key(&key).to_string();
+            assert_eq!(ex, chord);
+        }
+    }
+
 }

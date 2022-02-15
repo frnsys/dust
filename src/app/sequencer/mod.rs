@@ -344,6 +344,11 @@ impl<'a> Sequencer<'a> {
                         self.gen_progression()?;
                     }
 
+                    // Apply voice leading algorithm to progression
+                    KeyCode::Char('v') => {
+                        self.progression = self.progression.voice_lead();
+                    }
+
                     // Pause/resume playback
                     KeyCode::Char('p') => {
                         if self.events.is_paused() {
@@ -418,6 +423,7 @@ impl<'a> Sequencer<'a> {
             Span::styled(self.key.mode.to_string(), param_style),
             Span::raw(" [t]empo:"),
             Span::styled(self.tempo.to_string(), param_style),
+            Span::raw(" [v]oice-lead"),
         ];
 
         controls.push(Span::raw(if self.events.is_paused() {
