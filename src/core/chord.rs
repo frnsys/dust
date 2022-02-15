@@ -227,12 +227,17 @@ impl ChordSpec {
             // and claim it.
             // This represents a finger moving
             // from note A to note B.
-            let (idx, d) = intvs_b.iter()
-                .map(|intv| (a-intv).abs())
-                .enumerate()
-                .min_by_key(|(_, dist)| *dist)
-                .unwrap();
-            intvs_b.remove(idx);
+            let d = if intvs_b.is_empty() {
+                1
+            } else {
+                let (idx, d) = intvs_b.iter()
+                    .map(|intv| (a-intv).abs())
+                    .enumerate()
+                    .min_by_key(|(_, dist)| *dist)
+                    .unwrap();
+                intvs_b.remove(idx);
+                d
+            };
             dist += d;
         }
         dist as usize

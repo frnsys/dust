@@ -1,4 +1,4 @@
-MIDI output: Only tested with Bitwig, but should work with any DAW. See setup instructions below.
+A chord composing tool. `dust` doesn't output any audio itself but instead drives a DAW via MIDI.
 
 ## Setup
 
@@ -10,16 +10,48 @@ See below for more on chord progression patterns.
 
 ### Bitwig Studio MIDI
 
+MIDI has only been tested with Bitwig, but should work with any DAW.
+
 1. Setup virtual MIDI ports with `sudo modprobe snd_virmidi`
     - To have this automatically load on boot, edit `/etc/modules` and add `snd-virmidi`
 2. Launch `bitwig-studio`
-3. Then click the settings and add a generic controller. In the MIDI input dropdown you should see several "Virtual Raw MIDI" devices.
-4. Select "Virtual Raw MIDI/1"
-5. When running `dust`, press `O` to change the output to MIDI, then select the matching MIDI port.
+3. Setup `Dust -> Bitwig` (for sending chords/playing instruments)
+    1. In `Settings > Controllers`, add a generic controller. In the MIDI input dropdown you should see several "Virtual Raw MIDI" devices.
+    2. Select "Virtual Raw MIDI/1"
+4. Setup `Bitwig -> Dust` (for synchronizing the clock)
+    1. In `Settings > Synchronization`, find "Virtual Raw MIDI/1" and make sure both `Clock` and `Start/Stop` are active.
+
+By default, `dust` chooses the 2nd port (i.e. port 1, when 0-indexed) for both MIDI Input and Output, which should correspond to the "Virtual Raw MIDI/1". You can change this by using the `--midi-in-port` and `--midi-out-port` arguments; just pass in the index of the port to use instead.
 
 See also: <https://github.com/anton-k/linux-audio-howto/blob/master/doc/os-setup/virtual-midi.md>
 
-## Defining chord progression patterns
+## Usage
+
+`dust` has two modes: "Performance" mode (default) and "Sequencer" mode. You can use `M` to switch between them.
+
+### Performance Mode
+
+In this mode you can bind chords to the number keys 1-9. Use e.g. `Alt-1` to select a chord to bind to the `1` key.
+
+Alternatively, you can enter in a space-delimited progression by pressing `p`.
+
+### Sequencer Mode
+
+In this mode you layout chords in a sequencer format, which will run when you hit play in your DAW.
+
+Tips:
+
+- Use `hjkl` to move across the sequencer grid.
+- Use `A` and `B` to mark sections to loop.
+- Use `R` to generate a new chord progression, or `S` to generate one from a starting chord.
+- With a chord selected in the grid, use `U` and `D` to browse chords.
+
+### General tips
+
+- Use `v` to apply a voice-leading algorithm to the chord progression. This looks for inversions that minimize finger movement across the progression.
+- Use `E` to export to a MIDI file.
+
+### Defining chord progression patterns
 
 See `pattern.yaml`.
 

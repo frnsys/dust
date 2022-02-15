@@ -5,12 +5,11 @@ mod chord_select;
 mod performance;
 
 use anyhow::Result;
-use crate::midi::MIDI;
 use std::{
-    sync::Arc,
-    cell::RefCell,
     time::Duration,
+    sync::{Arc, Mutex},
 };
+use crate::midi::MIDIOutput;
 use crate::progression::ProgressionTemplate;
 use tui::{
     Terminal,
@@ -33,26 +32,29 @@ pub enum Mode {
 
 pub struct App<'a> {
     mode: Mode,
-    midi: Arc<RefCell<MIDI>>,
+    midi: Arc<Mutex<MIDIOutput>>,
     sequencer: Sequencer<'a>,
     performance: Performance<'a>,
     select: Option<Select>,
 }
 
 impl<'a> App<'a> {
-    pub fn new(template: ProgressionTemplate, save_dir: String) -> App<'a> {
-        let midi = Arc::new(RefCell::new(MIDI::new()));
+    pub fn new(template: ProgressionTemplate, midi_in_port: usize, midi_out_port: usize, save_dir: String) -> App<'a> {
+        let midi = MIDIOutput::from_port(midi_out_port).unwrap();
+        let midi = Arc::new(Mutex::new(midi));
+        let mut seq = Sequencer::new(midi.clone(), template, save_dir.clone());
+        seq.connect_port(midi_in_port).unwrap();
         App {
             midi: midi.clone(),
             select: None,
             mode: Mode::Performance,
-            sequencer: Sequencer::new(midi.clone(), template, save_dir.clone()),
+            sequencer: seq,
             performance: Performance::new(midi.clone(), save_dir),
         }
     }
 
     pub fn shutdown(&mut self) -> Result<()> {
-        self.midi.borrow_mut().shutdown()
+        self.midi.lock().unwrap().close()
     }
 }
 
@@ -135,7 +137,7 @@ pub fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> Result<(
                         Some(ref mut select) => {
                             let (selected, close) = select.process_input(key)?;
                             if let Some(idx) = selected {
-                                app.midi.borrow_mut().connect_port(idx).unwrap();
+                                app.midi.lock().unwrap().connect_port(idx).unwrap();
                             }
                             if close {
                                 app.select = None;
@@ -153,11 +155,9 @@ pub fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> Result<(
                                 KeyCode::Char('M') => {
                                     app.mode = match app.mode {
                                         Mode::Sequencer => {
-                                            app.sequencer.pause()?;
                                             Mode::Performance
                                         },
                                         Mode::Performance => {
-                                            app.sequencer.resume()?;
                                             Mode::Sequencer
                                         },
                                     }
@@ -165,7 +165,7 @@ pub fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> Result<(
 
                                 // Change the MIDI output port
                                 KeyCode::Char('P') => {
-                                    let ports = app.midi.borrow().available_ports().unwrap();
+                                    let ports = app.midi.lock().unwrap().available_ports().unwrap();
                                     app.select = Some(Select {
                                         idx: 0,
                                         choices: ports,

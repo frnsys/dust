@@ -5,19 +5,22 @@ use tui::{
     text::{Span, Spans},
     widgets::{Block, Paragraph, Borders},
 };
+use crate::core::ChordSpec;
 use super::Sequencer;
 use crossterm::event::{KeyEvent, KeyCode};
 
 pub fn render<'a>(seq: &Sequencer) -> Paragraph<'a> {
-    let progression = seq.progression.chords();
-    let (seq_idx, seq_item) = seq.selected();
-    let selected_chord = if seq_item.is_some() {
-        let chord_idx = seq.progression.seq_idx_to_chord_idx(seq_idx);
+    let sel_idx = seq.selected_idx();
+    let state = seq.state.lock().unwrap();
+    let progression = state.progression.chords();
+    let sel_item = &state.progression.sequence[sel_idx];
+    let selected_chord = if sel_item.is_some() {
+        let chord_idx = state.progression.seq_idx_to_chord_idx(sel_idx);
         Some(chord_idx)
     } else {
         None
     };
-    let cur_idx = seq.clip_start() + seq.tick - 1;
+    let cur_idx = state.clip_start() + state.tick;
 
     // The lines that will be rendered.
     let mut lines = vec![];
@@ -51,13 +54,13 @@ pub fn render<'a>(seq: &Sequencer) -> Paragraph<'a> {
         let name = format!("{:^5}", cs.to_string());
 
         // For rendering chord notes
-        let notes = cs.chord_for_key(&seq.key).describe_notes();
+        let notes = cs.chord_for_key(&state.key).describe_notes();
         if notes.len() > required_lines {
             required_lines = notes.len();
         }
         chord_notes.push(notes);
 
-        let chord_idx = seq.progression.chord_index[i];
+        let chord_idx = state.progression.chord_index[i];
         let style = if chord_idx == cur_idx {
             Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
         } else {
@@ -95,9 +98,11 @@ pub fn render<'a>(seq: &Sequencer) -> Paragraph<'a> {
 }
 
 pub fn process_input(seq: &mut Sequencer, key: KeyEvent) -> Result<()> {
-    let (seq_idx, seq_item) = seq.selected();
-    let selected_chord = if seq_item.is_some() {
-        let chord_idx = seq.progression.seq_idx_to_chord_idx(seq_idx);
+    let sel_idx = seq.selected_idx();
+    let mut state = seq.state.lock().unwrap();
+    let sel_item = &state.progression.sequence[sel_idx];
+    let selected_chord = if sel_item.is_some() {
+        let chord_idx = state.progression.seq_idx_to_chord_idx(sel_idx);
         Some(chord_idx)
     } else {
         None
@@ -107,9 +112,9 @@ pub fn process_input(seq: &mut Sequencer, key: KeyEvent) -> Result<()> {
         KeyCode::Char('U') => {
             // Cycle up a chord
             if let Some(chord_idx) = selected_chord {
-                let prev_chord = seq.progression.prev_chord(chord_idx);
-                let cands = seq.template.next(prev_chord, &seq.key.mode);
-                let current = seq.progression.chord(chord_idx).unwrap();
+                let prev_chord = state.progression.prev_chord(chord_idx);
+                let cands = seq.template.next(prev_chord, &state.key.mode);
+                let current = state.progression.chord(chord_idx).unwrap();
                 let idx = if let Some(idx) = cands.iter().position(|cs| cs == current) {
                     if idx == cands.len() - 1 {
                         0
@@ -119,15 +124,15 @@ pub fn process_input(seq: &mut Sequencer, key: KeyEvent) -> Result<()> {
                 } else {
                     0
                 };
-                seq.progression.set_chord(chord_idx, cands[idx].clone());
+                state.progression.set_chord(chord_idx, cands[idx].clone());
             }
         }
         KeyCode::Char('D') => {
             // Cycle down a chord
             if let Some(chord_idx) = selected_chord {
-                let prev_chord = seq.progression.prev_chord(chord_idx);
-                let cands = seq.template.next(prev_chord, &seq.key.mode);
-                let current = seq.progression.chord(chord_idx).unwrap();
+                let prev_chord = state.progression.prev_chord(chord_idx);
+                let cands = seq.template.next(prev_chord, &state.key.mode);
+                let current = state.progression.chord(chord_idx).unwrap();
                 let idx = if let Some(idx) = cands.iter().position(|cs| cs == current) {
                     if idx == 0 {
                         cands.len() - 1
@@ -137,7 +142,7 @@ pub fn process_input(seq: &mut Sequencer, key: KeyEvent) -> Result<()> {
                 } else {
                     0
                 };
-                seq.progression.set_chord(chord_idx, cands[idx].clone());
+                state.progression.set_chord(chord_idx, cands[idx].clone());
             }
         }
         _ => {}
@@ -146,8 +151,10 @@ pub fn process_input(seq: &mut Sequencer, key: KeyEvent) -> Result<()> {
 }
 
 pub fn controls<'a>(seq: &Sequencer) -> Vec<Span<'a>> {
-    let (_, seq_item) = seq.selected();
-    if seq_item.is_some() {
+    let sel_idx = seq.selected_idx();
+    let state = seq.state.lock().unwrap();
+    let sel_item = &state.progression.sequence[sel_idx];
+    if sel_item.is_some() {
         vec![
             Span::raw(" [U]p [D]own"),
         ]

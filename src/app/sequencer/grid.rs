@@ -9,26 +9,26 @@ use crossterm::event::{KeyEvent, KeyCode};
 use super::{Sequencer, InputMode, ChordSelect, ChordTarget};
 
 pub fn render<'a>(seq: &Sequencer) -> Paragraph<'a> {
-    let progression = &seq.progression.sequence;
-    let resolution = seq.template.resolution;
-    let bars = seq.bars;
-    let cur_idx = seq.clip_start() + seq.tick - 1;
-    let selected = seq.seq_pos;
+    let state = seq.state.lock().unwrap();
+    let progression = &state.progression.sequence;
+    let bars = state.bars;
+    let ticks_per_bar = state.progression.resolution.ticks_per_bar();
+    let cur_idx = state.clip_start() + state.tick;
 
     // The lines that will be rendered.
     let mut lines = vec![];
 
     for i in 0..bars {
         let mut bars: Vec<Span> = vec![];
-        for j in 0..resolution {
-            let idx = i*resolution + j;
-            let is_selected = (j, i) == selected;
+        for j in 0..ticks_per_bar {
+            let idx = i*ticks_per_bar + j;
+            let is_selected = (j, i) == seq.grid_pos;
 
             bars.push(Span::raw("|"));
 
             // What character is showing under the cursor
             let tick_char = if progression[idx].is_some() {
-                let chord_idx = seq.progression.seq_idx_to_chord_idx(idx) + 1;
+                let chord_idx = state.progression.seq_idx_to_chord_idx(idx) + 1;
                 chord_idx.to_string()
             } else if is_selected {
                 "*".to_string()
@@ -47,9 +47,9 @@ pub fn render<'a>(seq: &Sequencer) -> Paragraph<'a> {
             };
 
             // Highlight loop
-            let (a, b) = seq.clip;
+            let (a, b) = state.clip;
             let b = b - 1;
-            let is_loop = seq.has_loop();
+            let is_loop = state.has_loop();
             if is_loop && a == idx {
                 style = style.bg(Color::DarkGray);
             }
@@ -80,61 +80,62 @@ pub fn render<'a>(seq: &Sequencer) -> Paragraph<'a> {
 }
 
 pub fn process_input(seq: &mut Sequencer, key: KeyEvent) -> Result<()> {
-    let (sel_idx, sel_item) = seq.selected();
+    let sel_idx = seq.selected_idx();
+    let mut state = seq.state.lock().unwrap();
+    let sel_item = &state.progression.sequence[sel_idx];
+    let bars = state.progression.bars();
+    let ticks_per_bar = state.progression.resolution.ticks_per_bar();
 
     match key.code {
         // Set the start of the loop
         KeyCode::Char('A') => {
-            if seq.clip.0 != sel_idx && sel_idx < seq.clip.1 {
-                seq.clip.0 = sel_idx;
-                seq.restart_events()?;
+            if state.clip.0 != sel_idx && sel_idx < state.clip.1 {
+                state.clip.0 = sel_idx;
             }
         }
 
         // Set the end of the loop
         KeyCode::Char('B') => {
             let idx = sel_idx + 1;
-            if seq.clip.1 != idx && sel_idx > seq.clip.0 {
-                seq.clip.1 = idx;
-                seq.restart_events()?;
+            if state.clip.1 != idx && sel_idx > state.clip.0 {
+                state.clip.1 = idx;
             }
         }
 
         // Clear the loop
         KeyCode::Char('C') => {
-            seq.reset_clip();
-            seq.restart_events()?;
+            state.reset_clip();
         }
 
         // hjkl navigation
         KeyCode::Char('l') => {
-            let (x, _) = seq.seq_pos;
-            seq.seq_pos.0 = if x >= seq.template.resolution - 1 {
+            let (x, _) = seq.grid_pos;
+            seq.grid_pos.0 = if x >= ticks_per_bar - 1 {
                 0
             } else {
                 x + 1
             };
         }
         KeyCode::Char('h') => {
-            let (x, _) = seq.seq_pos;
-            seq.seq_pos.0 = if x == 0 {
-                seq.template.resolution - 1
+            let (x, _) = seq.grid_pos;
+            seq.grid_pos.0 = if x == 0 {
+                ticks_per_bar - 1
             } else {
                 x - 1
             };
         }
         KeyCode::Char('j') => {
-            let (_, y) = seq.seq_pos;
-            seq.seq_pos.1 = if y >= seq.progression.bars - 1 {
+            let (_, y) = seq.grid_pos;
+            seq.grid_pos.1 = if y >= bars - 1 {
                 0
             } else {
                 y + 1
             };
         }
         KeyCode::Char('k') => {
-            let (_, y) = seq.seq_pos;
-            seq.seq_pos.1 = if y == 0 {
-                seq.progression.bars - 1
+            let (_, y) = seq.grid_pos;
+            seq.grid_pos.1 = if y == 0 {
+                bars - 1
             } else {
                 y - 1
             };
@@ -158,17 +159,36 @@ pub fn process_input(seq: &mut Sequencer, key: KeyEvent) -> Result<()> {
             match sel_item {
                 None => {},
                 Some(_) => {
-                    seq.progression.delete_chord_at(sel_idx);
+                    state.progression.delete_chord_at(sel_idx);
                 }
             }
         }
+
+        // Select a progression chord by number
+        KeyCode::Char(c) => {
+            if c.is_numeric() {
+                let idx = c.to_string().parse::<usize>()? - 1;
+                if let Some(_) = state.progression.chord(idx) {
+                    let seq_idx = state.progression.chord_index[idx];
+
+                    let res = state.progression.resolution.ticks_per_bar();
+                    let i = seq_idx/res;
+                    let j = seq_idx.rem_euclid(res);
+                    seq.grid_pos = (j, i);
+                }
+            }
+        }
+
         _ => {}
     }
     Ok(())
 }
 
 pub fn controls<'a>(seq: &Sequencer) -> Vec<Span<'a>> {
-    let (_, sel_item) = seq.selected();
+    let sel_idx = seq.selected_idx();
+    let state = seq.state.lock().unwrap();
+    let sel_item = &state.progression.sequence[sel_idx];
+
     let mut controls = vec![
         Span::raw(" [e]dit"),
     ];
@@ -177,7 +197,7 @@ pub fn controls<'a>(seq: &Sequencer) -> Vec<Span<'a>> {
     }
 
     controls.push(Span::raw(" loop:[A]-[B]"));
-    if seq.has_loop() {
+    if state.has_loop() {
         controls.push(Span::raw(" [C]lear"));
     }
 

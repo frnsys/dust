@@ -1,11 +1,11 @@
 mod template;
 
-use crate::core::{Key, ChordSpec, Chord, voice_lead};
 pub use template::{ProgressionTemplate, ModeTemplate};
+use crate::core::{Key, ChordSpec, Chord, Duration, voice_lead};
 
+#[derive(Debug)]
 pub struct Progression {
-    pub bars: usize,
-    pub time_unit: f64,
+    pub resolution: Duration,
 
     // Progression sequence, one element
     // per tick. "None"s are rests.
@@ -21,13 +21,16 @@ pub struct Progression {
 }
 
 impl Progression {
-    pub fn new(sequence: Vec<Option<ChordSpec>>, bars: usize, time_unit: f64) -> Progression {
+    pub fn new(sequence: Vec<Option<ChordSpec>>, resolution: Duration) -> Progression {
         Progression {
-            bars,
-            time_unit,
+            resolution,
             chord_index: index_chords(&sequence),
             sequence,
         }
+    }
+
+    pub fn bars(&self) -> usize {
+        self.sequence.len() / self.resolution.ticks_per_bar()
     }
 
     pub fn in_key(&self, key: &Key) -> Vec<Option<Chord>> {
@@ -92,9 +95,8 @@ impl Progression {
     }
 
     pub fn voice_lead(&self) -> Progression {
-        let mut prog = Progression{
-            bars: self.bars.clone(),
-            time_unit: self.time_unit.clone(),
+        let mut prog = Progression {
+            resolution: self.resolution.clone(),
             chord_index: self.chord_index.clone(),
             sequence: self.sequence.clone()
         };
@@ -132,8 +134,7 @@ mod test {
                 Some("III".try_into().unwrap()),
                 Some("v".try_into().unwrap()),
             ],
-            4,
-            4./8.,
+            Duration::Eighth,
         );
         let vl_prog = prog.voice_lead();
         let key = Key {

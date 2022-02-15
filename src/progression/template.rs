@@ -1,11 +1,8 @@
-use rand::seq::SliceRandom;
+use rand::{Rng, seq::SliceRandom};
 use std::collections::HashMap;
 use serde::{Deserialize, Deserializer};
-use crate::core::{Mode, ChordSpec};
+use crate::core::{Mode, ChordSpec, Duration};
 use super::Progression;
-
-pub const BEATS_PER_BAR: usize = 4; // Assume 4/4 time
-const TIMING_FACTORS: [f64; 8] = [1., 2., 3., 4., 5., 6., 7., 8.];
 
 #[derive(Deserialize, PartialEq, Clone, Debug)]
 pub struct ModeTemplate {
@@ -67,10 +64,6 @@ where
 pub struct ProgressionTemplate {
     major: ModeTemplate,
     minor: ModeTemplate,
-
-    // How many divisions per bar,
-    // e.g. 8 is eighth notes
-    pub resolution: usize,
 }
 
 impl ProgressionTemplate {
@@ -90,96 +83,62 @@ impl ProgressionTemplate {
         }
     }
 
-    /// The base timing unit, in beats.
-    /// E.g. if the resolution is 8 (eighth notes),
-    /// i.e. 8 ticks per bar, and we assume 4/4 time,
-    /// then our smallest unit of time is 0.5 beats.
-    pub fn time_unit(&self) -> f64 {
-        // This is expressed in terms of beats, rather than bars,
-        // so an eighth note converts to a half of a beat
-        BEATS_PER_BAR as f64/self.resolution as f64
-    }
-
-    /// Ticks per beat
-    /// E.g. if the resolution is 8 (eighth notes),
-    /// i.e. 8 ticks per bar, and we assume 4/4 time,
-    /// then we have 2 ticks per beat.
-    pub fn ticks_per_beat(&self) -> usize {
-        self.resolution/BEATS_PER_BAR
-    }
-
     /// Generate a progression of chord specs starting with this chord spec.
-    pub fn gen_progression_from_seed(&self, seed: &ChordSpec, bars: usize, mode: &Mode) -> Progression  {
+    pub fn gen_progression_from_seed(&self, seed: &ChordSpec, mode: &Mode, bars: usize, resolution: &Duration) -> Progression  {
         let mut rng = rand::thread_rng();
-        let timings = self.gen_timing(bars);
+        let timings = self.gen_timing(bars, resolution);
         let mut last = seed.clone();
         let template = match mode {
             Mode::Major => &self.major,
             Mode::Minor => &self.minor,
         };
-        let mut progression: Vec<(ChordSpec, f64)> = vec![];
-        for beat in &timings {
-            let next = if progression.len() == 0 {
-                seed.clone()
-            } else {
-                let cands = template.next(&last);
-                let next = cands.choose(&mut rng);
-                if next.is_none() {
-                    break;
+        let mut prog: Vec<Option<ChordSpec>> = vec![];
+        for has_chord in timings {
+            if has_chord {
+                let next = if prog.len() == 0 {
+                    seed.clone()
                 } else {
-                    next.unwrap().clone()
-                }
-            };
+                    let cands = template.next(&last);
+                    let next = cands.choose(&mut rng);
+                    if next.is_none() {
+                        self.rand_chord_for_mode(mode)
+                    } else {
+                        next.unwrap().clone()
+                    }
+                };
 
-            last = next.clone();
-            progression.push((next, *beat));
+                last = next.clone();
+                prog.push(Some(next));
+            } else {
+                prog.push(None);
+            }
         }
-        Progression::new(timed_to_sequence(bars, self.time_unit(), &progression), bars, self.time_unit())
+        Progression::new(prog, *resolution)
     }
 
     /// Generate a progression of chord specs for a given mode.
-    pub fn gen_progression(&self, bars: usize, mode: &Mode) -> Progression  {
-        let mut rng = rand::thread_rng();
-        let pattern = self.rand_pattern(mode);
-        let n_chords = pattern.len() as isize;
-        let mut progression: Vec<(ChordSpec, f64)> = vec![];
-        let timings = self.gen_timing(bars);
-        let mut i: isize = 0;
-        for beat in &timings {
-            // Can go back one, repeat, or go forward one
-            let cands = vec![
-                (i-1).rem_euclid(n_chords) as usize,
-                (i).rem_euclid(n_chords) as usize,
-                (i+1).rem_euclid(n_chords) as usize,
-            ];
-            // Can unwrap because we know there will be 3 candidates
-            let next_idx = cands.choose(&mut rng).unwrap();
-            let next = pattern[*next_idx].clone();
-            progression.push((next, *beat));
-            i = *next_idx as isize;
-        }
-        Progression::new(timed_to_sequence(bars, self.time_unit(), &progression), bars, self.time_unit())
+    pub fn gen_progression(&self, mode: &Mode, bars: usize, resolution: &Duration) -> Progression {
+        let seed = self.rand_chord_for_mode(mode);
+        self.gen_progression_from_seed(&seed, mode, bars, resolution)
     }
 
     /// Generates random timings for chords in the progression.
-    fn gen_timing(&self, bars: usize) -> Vec<f64> {
-        let mut total = 0.;
-
+    fn gen_timing(&self, bars: usize, resolution: &Duration) -> Vec<bool> {
         // Always start with a chord on the first beat
-        let mut timings = vec![0.];
+        let mut seq = vec![true];
         let mut rng = rand::thread_rng();
-        let time_unit = self.time_unit();
-        let total_beats = (bars * BEATS_PER_BAR) as f64;
+        let total = bars * resolution.ticks_per_bar();
         loop {
-            let factor = TIMING_FACTORS.choose(&mut rng).unwrap();
-            let beats = factor * time_unit;
-            total += beats;
-            if total >= total_beats {
+            let pause = rng.gen_range(0..resolution.ticks_per_bar());
+            for _ in 0..pause {
+                seq.push(false);
+            }
+            seq.push(true);
+            if seq.len() > total {
                 break;
             }
-            timings.push(beats);
         }
-        timings
+        seq.drain(0..total).collect()
     }
 
     /// Randomly chooses a pattern given a mode.
@@ -200,35 +159,6 @@ impl ProgressionTemplate {
     }
 }
 
-/// Convert a timed progression to a sequence
-fn timed_to_sequence(bars: usize, time_unit: f64, sequence: &Vec<(ChordSpec, f64)>) -> Vec<Option<ChordSpec>> {
-    let mut seq = vec![];
-    let mut last_beat = 0.;
-    for (i, (cs, elapsed)) in sequence.iter().enumerate() {
-        let beat = last_beat + elapsed;
-        let n_rests = if i == 0 {
-            (beat/time_unit) as usize
-        } else {
-            ((beat - last_beat)/time_unit) as usize - 1
-        };
-        for _ in 0..n_rests {
-            seq.push(None);
-        }
-        last_beat = beat;
-        seq.push(Some(cs.clone()));
-
-        // Fill out to end if necessary
-        if i == sequence.len() - 1 {
-            let total_beats = (bars * BEATS_PER_BAR) as f64;
-            let n_rests = ((total_beats - beat)/time_unit) as usize - 1;
-            for _ in 0..n_rests {
-                seq.push(None);
-            }
-        }
-    }
-    seq
-}
-
 #[cfg(test)]
 mod test {
     use super::*;
@@ -238,7 +168,6 @@ mod test {
         let bars = 4;
         let mode = Mode::Major;
         let template = ProgressionTemplate {
-            resolution: 8,
             major: ModeTemplate {
                 patterns: vec![vec![
                     "I".try_into().unwrap(),
@@ -253,49 +182,7 @@ mod test {
                 transitions: HashMap::default()
             }
         };
-        let progression = template.gen_progression(bars, &mode);
-        assert_eq!(progression.sequence.len(), bars * template.resolution);
-    }
-
-    #[test]
-    fn test_timed_to_sequence() {
-        let bars = 1;
-        let template = ProgressionTemplate {
-            resolution: 8,
-            major: ModeTemplate {
-                patterns: vec![vec![
-                    "I".try_into().unwrap(),
-                    "V".try_into().unwrap(),
-                    "vi".try_into().unwrap(),
-                    "IV".try_into().unwrap(),
-                ]],
-                transitions: HashMap::default()
-            },
-            minor: ModeTemplate {
-                patterns: vec![],
-                transitions: HashMap::default()
-            }
-        };
-        let chord: ChordSpec = "I".try_into().unwrap();
-        // At resolution=8 the smallest unit is 0.5
-        // aka half a beat aka half a quarter note
-        let progression = vec![
-            (chord.clone(), 0.5), // 0.5
-            (chord.clone(), 1.),  // 1.5
-            (chord.clone(), 2.0), // 3.5
-        ];
-        let sequence = timed_to_sequence(bars, template.time_unit(), &progression);
-        let expected = vec![
-            None,
-            Some(chord.clone()),
-            None,
-            Some(chord.clone()),
-            None,
-            None,
-            None,
-            Some(chord.clone()),
-        ];
-        assert_eq!(sequence.len(), template.resolution * bars);
-        assert_eq!(sequence, expected);
+        let progression = template.gen_progression(&mode, bars, &Duration::Eighth);
+        assert_eq!(progression.sequence.len(), bars * Duration::Eighth.ticks_per_bar());
     }
 }

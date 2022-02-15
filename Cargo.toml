@@ -6,7 +6,6 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-kira = "0.5.3"
 rand = "0.8.4"
 regex = "1.5.4"
 midir = "0.7.0"

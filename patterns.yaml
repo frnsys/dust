@@ -42,6 +42,7 @@ major:
     - iii iiib ii
     - I iii V iii iii V
     - I:7 iib:b7 vi:b9 iv:b9
+    - I:7 i:7
 minor:
   patterns:
     - i v iv V

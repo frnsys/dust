@@ -28,6 +28,12 @@ struct Args {
 
     #[clap(short, long, default_value = "/tmp/", value_hint = ValueHint::DirPath)]
     save_dir: String,
+
+    #[clap(long, default_value = "1")]
+    midi_in_port: usize,
+
+    #[clap(long, default_value = "1")]
+    midi_out_port: usize,
 }
 
 fn main() -> Result<()> {
@@ -51,7 +57,7 @@ fn main() -> Result<()> {
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
 
-    let app = App::new(template, args.save_dir);
+    let app = App::new(template, args.midi_in_port, args.midi_out_port, args.save_dir);
     let res = run_app(&mut terminal, app);
 
     disable_raw_mode()?;

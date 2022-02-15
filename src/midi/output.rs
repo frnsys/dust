@@ -1,7 +1,7 @@
 use anyhow::Result;
-use thiserror::Error;
+use super::MIDIError;
 use crate::core::Chord;
-use midir::{MidiOutput, MidiOutputConnection, InitError, ConnectError};
+use midir::{MidiOutput, MidiOutputConnection};
 use std::{thread, sync::{Arc, Mutex}};
 use std::{thread::sleep, time::Duration};
 use std::collections::HashMap;
@@ -10,7 +10,7 @@ const VELOCITY: u8 = 0x64;
 const NOTE_ON_MSG: u8 = 0x90;
 const NOTE_OFF_MSG: u8 = 0x80;
 
-pub struct MIDI {
+pub struct MIDIOutput {
     pub name: Option<String>,
     conn: Arc<Mutex<Option<MidiOutputConnection>>>,
 
@@ -19,28 +19,20 @@ pub struct MIDI {
     note_owners: Arc<Mutex<HashMap<u8, usize>>>,
 }
 
-#[derive(Error, Debug)]
-pub enum MIDIError {
-    #[error("No active output connection")]
-    NotConnected,
 
-    #[error("Invalid port index: {0}")]
-    InvalidPort(usize),
-
-    #[error("Couldn't initialize output")]
-    InitError(#[from] InitError),
-
-    #[error("Couldn't connect to output port")]
-    ConnectionError(#[from] ConnectError<MidiOutput>),
-}
-
-impl MIDI {
-    pub fn new() -> MIDI {
-        MIDI {
+impl MIDIOutput {
+    pub fn new() -> MIDIOutput {
+        MIDIOutput {
             name: None,
             conn: Arc::new(Mutex::new(None)),
             note_owners: Arc::new(Mutex::new(HashMap::default())),
         }
+    }
+
+    pub fn from_port(port: usize) -> Result<MIDIOutput, MIDIError> {
+        let mut m = MIDIOutput::new();
+        m.connect_port(port)?;
+        Ok(m)
     }
 
     fn output(&self) -> Result<MidiOutput, MIDIError> {
@@ -147,7 +139,7 @@ impl MIDI {
         });
     }
 
-    pub fn shutdown(&mut self) -> Result<()> {
+    pub fn close(&mut self) -> Result<()> {
         let conn = self.conn.clone();
         let mut conn = conn.lock().unwrap();
 

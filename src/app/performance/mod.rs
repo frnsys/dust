@@ -1,6 +1,6 @@
 use anyhow::Result;
-use crate::midi::MIDI;
-use std::{sync::Arc, cell::RefCell};
+use crate::midi::MIDIOutput;
+use std::sync::{Arc, Mutex};
 use crate::file::save_to_midi_file;
 use crate::app::text_input::TextInput;
 use crate::app::chord_select::ChordSelect;
@@ -27,7 +27,7 @@ enum TextTarget {
 }
 
 pub struct Performance<'a> {
-    midi: Arc<RefCell<MIDI>>,
+    midi: Arc<Mutex<MIDIOutput>>,
 
     key: Key,
     note_duration: u64,
@@ -41,7 +41,7 @@ pub struct Performance<'a> {
 }
 
 impl<'a> Performance<'a> {
-    pub fn new(midi: Arc<RefCell<MIDI>>, save_dir: String) -> Performance<'a> {
+    pub fn new(midi: Arc<Mutex<MIDIOutput>>, save_dir: String) -> Performance<'a> {
         let key = Key::default();
         Performance {
             key,
@@ -110,6 +110,7 @@ impl<'a> Performance<'a> {
     }
 
     pub fn process_input(&mut self, key: KeyEvent) -> Result<()> {
+        let mut midi = self.midi.lock().unwrap();
         match &mut self.input_mode {
             InputMode::Text(ref mut text_input, target) => {
                 let (input, close) = text_input.process_input(key)?;
@@ -172,7 +173,7 @@ impl<'a> Performance<'a> {
                     Ok((sel, close)) => {
                         if let Some(cs) = sel {
                             let chord = cs.chord_for_key(&self.key);
-                            self.midi.borrow_mut().play_chord(&chord, self.note_duration);
+                            midi.play_chord(&chord, self.note_duration);
                             self.mappings[*idx] = Some(cs);
                         }
                         if close {
@@ -185,7 +186,7 @@ impl<'a> Performance<'a> {
                                     let idx = c.to_string().parse::<usize>()? - 1;
                                     if let Some(cs) = &self.mappings[idx] {
                                         let chord = cs.chord_for_key(&self.key);
-                                        self.midi.borrow_mut().play_chord(&chord, self.note_duration);
+                                        midi.play_chord(&chord, self.note_duration);
                                     }
                                 }
                             }
@@ -278,7 +279,7 @@ impl<'a> Performance<'a> {
                             let idx = c.to_string().parse::<usize>()? - 1;
                             if let Some(cs) = &self.mappings[idx] {
                                 let chord = cs.chord_for_key(&self.key);
-                                self.midi.borrow_mut().play_chord(&chord, self.note_duration);
+                                midi.play_chord(&chord, self.note_duration);
                             }
                         }
                     }
