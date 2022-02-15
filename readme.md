@@ -21,6 +21,8 @@ MIDI has only been tested with Bitwig, but should work with any DAW.
 4. Setup `Bitwig -> Dust` (for synchronizing the clock)
     1. In `Settings > Synchronization`, find "Virtual Raw MIDI/1" and make sure both `Clock` and `Start/Stop` are active.
 
+For me `Virtual Raw MIDI/1` corresponded to the ports called `Virtual Raw MIDI 0-0:VirMIDI 0-0 16:0`.
+
 By default, `dust` chooses the 2nd port (i.e. port 1, when 0-indexed) for both MIDI Input and Output, which should correspond to the "Virtual Raw MIDI/1". You can change this by using the `--midi-in-port` and `--midi-out-port` arguments; just pass in the index of the port to use instead.
 
 See also: <https://github.com/anton-k/linux-audio-howto/blob/master/doc/os-setup/virtual-midi.md>

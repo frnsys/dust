@@ -8,6 +8,7 @@ use crate::core::{Duration, Mode};
 use crate::file::save_to_midi_file;
 use crate::app::text_input::TextInput;
 use crate::app::chord_select::ChordSelect;
+use crate::app::select::Select;
 use crate::progression::ProgressionTemplate;
 use crate::midi::{MIDIOutput, MIDIClock, MIDIError, ClockEvent};
 use tui::{
@@ -21,6 +22,7 @@ use state::PlaybackState;
 
 enum InputMode<'a> {
     Normal,
+    Select(Select, SelectTarget),
     Text(TextInput<'a>, TextTarget),
     Chord(ChordSelect<'a>, ChordTarget),
 }
@@ -35,6 +37,10 @@ pub enum TextTarget {
     Bars,
     Duration,
     Export,
+}
+
+enum SelectTarget {
+    Resolution,
 }
 
 pub struct Sequencer<'a> {
@@ -158,7 +164,11 @@ impl<'a> Sequencer<'a> {
             InputMode::Chord(select, _) => {
                 let height = display_chunks[1].height as usize;
                 select.render(height)
-            },
+            }
+            InputMode::Select(select, _) => {
+                let height = display_chunks[1].height as usize;
+                select.render(height)
+            }
             _ => progression::render(&self)
         };
         rects.push((right_pane, display_chunks[1]));
@@ -167,6 +177,31 @@ impl<'a> Sequencer<'a> {
 
     pub fn process_input(&mut self, key: KeyEvent) -> Result<()> {
         match &mut self.input_mode {
+            InputMode::Select(ref mut select, target) => {
+                let (selection, close) = select.process_input(key)?;
+                if close {
+                    if let Some(selected) = selection {
+                        match target {
+                            SelectTarget::Resolution => {
+                                let res = match selected {
+                                    0 => Duration::Quarter,
+                                    1 => Duration::Eighth,
+                                    2 => Duration::Sixteenth,
+                                    3 => Duration::ThirtySecond,
+                                    _ => Duration::Quarter,
+                                };
+                                {
+                                    let mut s = self.state.lock().unwrap();
+                                    s.resolution = res;
+                                    s.gen_progression(&self.template)?;
+                                }
+                                self.ticks_per_bar = res.ticks_per_bar();
+                            }
+                        }
+                    }
+                    self.input_mode = InputMode::Normal;
+                }
+            },
             InputMode::Text(ref mut text_input, target) => {
                 let (input, close) = text_input.process_input(key)?;
                 if close {
@@ -267,6 +302,19 @@ impl<'a> Sequencer<'a> {
                             TextTarget::Duration);
                     }
 
+                    KeyCode::Char('s') => {
+                        self.message = "";
+                        let choices = vec![
+                            Duration::Quarter,
+                            Duration::Eighth,
+                            Duration::Sixteenth,
+                            Duration::ThirtySecond,
+                        ].iter().map(|d| d.to_string()).collect();
+                        self.input_mode = InputMode::Select(
+                            Select::new(choices),
+                            SelectTarget::Resolution);
+                    }
+
                     // Change mode
                     KeyCode::Char('m') => {
                         let mut s = self.state.lock().unwrap();
@@ -330,6 +378,8 @@ impl<'a> Sequencer<'a> {
                 Span::styled(s.note_duration.to_string(), param_style),
                 Span::raw(" [b]ars:"),
                 Span::styled(s.bars.to_string(), param_style),
+                Span::raw(" re[s]olution:"),
+                Span::styled(s.resolution.to_string(), param_style),
                 Span::raw(" [m]ode:"),
                 Span::styled(s.key.mode.to_string(), param_style),
                 Span::raw(" [v]oice-lead"),

@@ -166,10 +166,7 @@ pub fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> Result<(
                                 // Change the MIDI output port
                                 KeyCode::Char('P') => {
                                     let ports = app.midi.lock().unwrap().available_ports().unwrap();
-                                    app.select = Some(Select {
-                                        idx: 0,
-                                        choices: ports,
-                                    })
+                                    app.select = Some(Select::new(ports));
                                 }
                                 _ => {
                                     match app.mode {

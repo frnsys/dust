@@ -13,6 +13,13 @@ pub struct Select {
 }
 
 impl Select {
+    pub fn new(choices: Vec<String>) -> Select {
+        Select {
+            idx: 0,
+            choices,
+        }
+    }
+
     pub fn render<'a>(&self, height: usize) -> Paragraph<'a> {
         let start = self.idx.saturating_sub(height);
         let end = self.choices.len().min(start+height);

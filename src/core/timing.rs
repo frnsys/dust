@@ -1,3 +1,5 @@
+use std::fmt;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Duration {
     Quarter,
@@ -25,3 +27,16 @@ impl Duration {
         }
     }
 }
+
+impl fmt::Display for Duration {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let name = match self {
+            Duration::Quarter => "1/4",
+            Duration::Eighth => "1/8",
+            Duration::Sixteenth => "1/16",
+            Duration::ThirtySecond => "1/32",
+        };
+        write!(f, "{}", name)
+    }
+}
+
