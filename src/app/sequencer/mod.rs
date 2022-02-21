@@ -365,27 +365,26 @@ impl<'a> Sequencer<'a> {
         Ok(())
     }
 
-    pub fn controls<'b>(&self) -> Vec<Span<'b>> {
+    pub fn params<'b>(&self) -> Vec<Span<'b>> {
         let param_style = Style::default().fg(Color::LightBlue)
             .add_modifier(Modifier::BOLD);
+        let s = self.state.lock().unwrap();
+        vec![
+            Span::raw("[r]oot:"),
+            Span::styled(s.key.root.to_string(), param_style),
+            Span::raw(" d[u]ration:"),
+            Span::styled(s.note_duration.to_string(), param_style),
+            Span::raw(" [b]ars:"),
+            Span::styled(s.bars.to_string(), param_style),
+            Span::raw(" re[s]olution:"),
+            Span::styled(s.resolution.to_string(), param_style),
+            Span::raw(" [m]ode:"),
+            Span::styled(s.key.mode.to_string(), param_style),
+        ]
+    }
 
-        let mut controls = {
-            let s = self.state.lock().unwrap();
-            vec![
-                Span::raw("[r]oot:"),
-                Span::styled(s.key.root.to_string(), param_style),
-                Span::raw(" d[u]ration:"),
-                Span::styled(s.note_duration.to_string(), param_style),
-                Span::raw(" [b]ars:"),
-                Span::styled(s.bars.to_string(), param_style),
-                Span::raw(" re[s]olution:"),
-                Span::styled(s.resolution.to_string(), param_style),
-                Span::raw(" [m]ode:"),
-                Span::styled(s.key.mode.to_string(), param_style),
-                Span::raw(" [v]oice-lead"),
-            ]
-        };
-
+    pub fn controls<'b>(&self) -> Vec<Span<'b>> {
+        let mut controls = vec![];
         controls.extend(grid::controls(&self));
         controls.extend(progression::controls(&self));
         controls.push(

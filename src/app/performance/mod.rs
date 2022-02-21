@@ -7,9 +7,9 @@ use crate::app::chord_select::ChordSelect;
 use crate::core::{Key, Mode, ChordSpec, ChordParseError, voice_lead};
 use crossterm::event::{KeyEvent, KeyCode, KeyModifiers};
 use tui::{
-    widgets::Paragraph,
     text::{Span, Spans},
     style::{Style, Modifier, Color},
+    widgets::{Block, Paragraph, Borders},
     layout::{Rect, Alignment, Constraint, Direction, Layout},
 };
 
@@ -291,16 +291,22 @@ impl<'a> Performance<'a> {
         Ok(())
     }
 
-    pub fn controls<'b>(&self) -> Vec<Span<'b>> {
+    pub fn params<'b>(&self) -> Vec<Span<'b>> {
         let param_style = Style::default().fg(Color::LightBlue)
             .add_modifier(Modifier::BOLD);
-        let controls = vec![
+        let params = vec![
             Span::raw("[r]oot:"),
             Span::styled(self.key.root.to_string(), param_style),
             Span::raw(" d[u]ration:"),
             Span::styled(self.note_duration.to_string(), param_style),
             Span::raw(" [m]ode:"),
             Span::styled(self.key.mode.to_string(), param_style),
+        ];
+        params
+    }
+
+    pub fn controls<'b>(&self) -> Vec<Span<'b>> {
+        let controls = vec![
             Span::raw(" [p]rogression"),
             Span::raw(" [v]oice-lead"),
             Span::raw(" [E]xport"),
@@ -374,4 +380,10 @@ pub fn render_mappings<'a>(key: &Key, mappings: &[Option<ChordSpec>], selected: 
 
     Paragraph::new(lines)
         .alignment(Alignment::Center)
+        .block(
+            Block::default()
+                .title("Mappings")
+                .borders(Borders::TOP)
+                .style(Style::default())
+        )
 }

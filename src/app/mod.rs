@@ -65,13 +65,31 @@ pub fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> Result<(
             let rects = Layout::default()
                 .direction(Direction::Vertical)
                 .constraints([
+                    // Params rect
+                    Constraint::Length(1),
+
                     // Main rect
                     Constraint::Min(6),
 
-                    // Help rect
+                    // Controls rect
                     Constraint::Length(1),
                     ].as_ref())
                 .split(size);
+
+            // Params help bar
+            let mut params = vec![];
+            match app.mode {
+                Mode::Performance => {
+                    params.extend(app.performance.params());
+                }
+                Mode::Sequencer => {
+                    params.extend(app.sequencer.params());
+                }
+            }
+
+            let params_help = Paragraph::new(Spans::from(params))
+                .alignment(Alignment::Center);
+            frame.render_widget(params_help, rects[0]);
 
             // Controls help bar
             let mut controls = vec![];
@@ -85,18 +103,18 @@ pub fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> Result<(
             }
             controls.push(
                 Span::raw(" [M]ode [P]ort [Q]uit"));
-            let help = Paragraph::new(Spans::from(controls))
+            let controls_help = Paragraph::new(Spans::from(controls))
                 .alignment(Alignment::Left);
-            frame.render_widget(help, rects[1]);
+            frame.render_widget(controls_help, rects[2]);
 
             match &mut app.select {
                 None => {
                     let chunks: Vec<(Paragraph, Rect)> = match app.mode {
                         Mode::Performance => {
-                            app.performance.render(rects[0])
+                            app.performance.render(rects[1])
                         }
                         Mode::Sequencer => {
-                            app.sequencer.render(rects[0])
+                            app.sequencer.render(rects[1])
                         }
                     };
                     for (p, rect) in chunks {
@@ -104,8 +122,8 @@ pub fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> Result<(
                     }
                 }
                 Some(select) => {
-                    let height = rects[0].height as usize;
-                    frame.render_widget(select.render(height), rects[0]);
+                    let height = rects[1].height as usize;
+                    frame.render_widget(select.render(height), rects[1]);
                 }
             }
         })?;

@@ -5,7 +5,6 @@ use tui::{
     text::{Span, Spans},
     widgets::{Block, Paragraph, Borders},
 };
-use crate::core::ChordSpec;
 use super::Sequencer;
 use crossterm::event::{KeyEvent, KeyCode};
 
