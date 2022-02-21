@@ -1,3 +1,5 @@
+![Screenshot of the `dust` chord sequencer](shot.png)
+
 A chord composing tool. `dust` doesn't output any audio itself but instead drives a DAW via MIDI.
 
 ## Setup
