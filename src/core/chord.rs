@@ -11,7 +11,7 @@ pub const NUMERALS: [&str; 7] = ["I", "II", "III", "IV", "V", "VI", "VII"];
 
 lazy_static! {
     static ref CHORD_RE: Regex = Regex::new(
-        r"^([IV]+|[iv]+)([b#])*([+-^_5])?(:([b#]?\d+,?)*)?(/([b#]?\d+)|(%([b#]?\d+)))?(>\d+)?(<\d+)?(~([IV]+|[iv]+))?$")
+        r"^([IV]+|[iv]+)([b#])*([+-^_5])?(:([b#]?\d+,?)*)?(/([b#]?\d+)|(%([b#]?\d+)))?(>\d+)?(<\d+)?(~([IV]+|[iv]+)([b#])*)?$")
         .unwrap();
 }
 
@@ -47,7 +47,7 @@ pub struct ChordSpec {
     extensions: Vec<Degree>,
     bass_degree: Option<Degree>,
     inversion: usize,
-    rel_key: Option<(usize, Mode)>,
+    rel_key: Option<(usize, isize, Mode)>,
 }
 
 impl ChordSpec {
@@ -98,8 +98,8 @@ impl ChordSpec {
     }
 
     /// Set the relative key, e.g. for secondary dominants
-    pub fn key_of(mut self, degree: usize, mode: Mode) -> ChordSpec {
-        self.rel_key = Some((degree, mode));
+    pub fn key_of(mut self, degree: usize, adj: isize, mode: Mode) -> ChordSpec {
+        self.rel_key = Some((degree, adj, mode));
         self
     }
 
@@ -136,17 +136,17 @@ impl ChordSpec {
     pub fn intervals(&self) -> Vec<isize> {
         let offset = match self.rel_key {
             None => 0,
-            Some((degree, _)) => {
-                match self.mode {
+            Some((degree, adj, _)) => {
+                adj + match self.mode {
                     Mode::Major => MAJOR[degree - 1 % 7],
                     Mode::Minor => MINOR[degree - 1 % 7]
-                }
+                } as isize
             }
-        } as isize;
+        };
 
         let mode = match self.rel_key {
             None => self.mode,
-            Some((_, mode)) => mode
+            Some((_, _, mode)) => mode
         };
 
         let mut intervals = match self.triad {
@@ -281,6 +281,7 @@ impl FromStr for ChordSpec {
         let shift_up = caps.get(10).and_then(|m| Some(m.as_str()));
         let shift_down = caps.get(11).and_then(|m| Some(m.as_str()));
         let rel_key = caps.get(13).and_then(|m| Some(m.as_str()));
+        let rel_key_adj = caps.get(14).and_then(|m| Some(m.as_str()));
 
         let mode = numeral_to_mode(numeral)?;
         let mut adj = match adj {
@@ -334,7 +335,11 @@ impl FromStr for ChordSpec {
             let rel_key = if let Some(rel_key) = rel_key {
                 if let Some(degree_0) = numeral_to_index(rel_key) {
                     let mode = numeral_to_mode(rel_key)?;
-                    Ok(Some((degree_0 + 1, mode)))
+                    let adj = match rel_key_adj {
+                        Some(adj) => adj.matches('#').count() as isize - adj.matches('b').count() as isize,
+                        None => 0
+                    };
+                    Ok(Some((degree_0 + 1, adj, mode)))
                 } else {
                     Err(ChordParseError::InvalidRelKey(rel_key.to_string()))
                 }
@@ -437,13 +442,19 @@ impl fmt::Display for ChordSpec {
             }
         }
 
-        if let Some((degree, mode)) = self.rel_key {
+        if let Some((degree, adj, mode)) = self.rel_key {
             name.push('~');
             let numeral = NUMERALS[(degree - 1) % 7];
             if mode == Mode::Minor {
                 name.push_str(&numeral.to_lowercase());
             } else {
                 name.push_str(&numeral);
+            }
+            let n = adj.abs() as usize;
+            if adj < 0 {
+                name.push_str(&std::iter::repeat("b").take(n).collect::<String>());
+            } else if adj > 0 {
+                name.push_str(&std::iter::repeat("#").take(n).collect::<String>());
             }
         }
         write!(f, "{}", name)
@@ -556,12 +567,16 @@ mod test {
         assert_eq!(spec.to_string(), "iii-:7/5".to_string());
 
         let spec = ChordSpec::new(3, Mode::Minor).triad(Triad::Diminished)
-            .add(7, 0).bass(5, 0).key_of(2, Mode::Minor);
+            .add(7, 0).bass(5, 0).key_of(2, 0, Mode::Minor);
         assert_eq!(spec.to_string(), "iii-:7/5~ii".to_string());
 
         let spec = ChordSpec::new(3, Mode::Minor).triad(Triad::Diminished)
-            .add(7, 0).add(9, 0).bass(5, 0).key_of(2, Mode::Minor);
+            .add(7, 0).add(9, 0).bass(5, 0).key_of(2, 0, Mode::Minor);
         assert_eq!(spec.to_string(), "iii-:7,9/5~ii".to_string());
+
+        let spec = ChordSpec::new(3, Mode::Minor).triad(Triad::Diminished)
+            .add(7, 0).add(9, 0).bass(5, 0).key_of(2, -1, Mode::Minor);
+        assert_eq!(spec.to_string(), "iii-:7,9/5~iib".to_string());
 
         let spec = ChordSpec::new(1, Mode::Major).triad(Triad::Power);
         assert_eq!(spec.to_string(), "I5".to_string());
@@ -760,12 +775,17 @@ mod test {
 
         let name = "V_:7,9~ii";
         let spec: ChordSpec = name.try_into().unwrap();
-        let expected = ChordSpec::new(5, Mode::Major).triad(Triad::Sus2).add(7, 0).add(9, 0).key_of(2, Mode::Minor);
+        let expected = ChordSpec::new(5, Mode::Major).triad(Triad::Sus2).add(7, 0).add(9, 0).key_of(2, 0, Mode::Minor);
         assert_eq!(spec, expected);
 
         let name = "V^:7,9/5~ii";
         let spec: ChordSpec = name.try_into().unwrap();
-        let expected = ChordSpec::new(5, Mode::Major).triad(Triad::Sus4).add(7, 0).add(9, 0).key_of(2, Mode::Minor).bass(5, 0);
+        let expected = ChordSpec::new(5, Mode::Major).triad(Triad::Sus4).add(7, 0).add(9, 0).key_of(2, 0, Mode::Minor).bass(5, 0);
+        assert_eq!(spec, expected);
+
+        let name = "V^:7,9/5~iib";
+        let spec: ChordSpec = name.try_into().unwrap();
+        let expected = ChordSpec::new(5, Mode::Major).triad(Triad::Sus4).add(7, 0).add(9, 0).key_of(2, -1, Mode::Minor).bass(5, 0);
         assert_eq!(spec, expected);
 
         let name = "VIIb";
