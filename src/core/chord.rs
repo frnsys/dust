@@ -134,18 +134,6 @@ impl ChordSpec {
     /// The actual intervals that make up this chord,
     /// relative to the chord's root
     pub fn intervals(&self) -> Vec<isize> {
-        let offset = match &self.rel_key {
-            None => 0,
-            Some((degree, _)) => {
-                degree.to_interval(&self.mode) // TODO
-            }
-        };
-
-        let mode = match self.rel_key {
-            None => self.mode,
-            Some((_, mode)) => mode
-        };
-
         let mut intervals = match self.triad {
             Triad::Mode => {
                 match self.mode {
@@ -175,11 +163,11 @@ impl ChordSpec {
         };
 
         for ext in &self.extensions {
-            intervals.push(ext.to_interval(&mode));
+            intervals.push(ext.to_interval(&self.mode));
         }
 
         if let Some(bass_degree) = &self.bass_degree {
-            let bass_interval = bass_degree.to_interval(&mode);
+            let bass_interval = bass_degree.to_interval(&self.mode);
             intervals = intervals.iter().map(|intv| if *intv < bass_interval {
                 intv + 12
             } else {
@@ -194,7 +182,7 @@ impl ChordSpec {
             intervals.extend(shifted);
         }
 
-        intervals.iter().map(|intv| offset + *intv).collect()
+        intervals
     }
 
     /// The chord's intervals
@@ -207,7 +195,16 @@ impl ChordSpec {
     /// Resolve the chord spec into actual semitones
     /// for the given key.
     pub fn chord_for_key(&self, key: &Key) -> Chord {
-        let root = key.note(&self.root);
+        let root = match &self.rel_key {
+            None => key.note(&self.root),
+            Some((degree, mode)) => {
+                let rel_key = Key {
+                    root: key.note(&degree),
+                    mode: *mode,
+                };
+                rel_key.note(&self.root)
+            }
+        };
         Chord::new(root, self.intervals())
     }
 
@@ -711,6 +708,66 @@ mod test {
             semitones: 48
         }, Note {
             semitones: 51
+        }];
+        assert_eq!(notes.len(), expected.len());
+        for (a, b) in notes.iter().zip(expected) {
+            assert_eq!(*a, b);
+        }
+
+        let spec: ChordSpec = "I~II".try_into().unwrap();
+        let chord = spec.chord_for_key(&key);
+        let notes = chord.notes();
+        let expected = vec![Note {
+            semitones: 29 // D
+        }, Note {
+            semitones: 33 // F#
+        }, Note {
+            semitones: 36 // A
+        }];
+        assert_eq!(notes.len(), expected.len());
+        for (a, b) in notes.iter().zip(expected) {
+            assert_eq!(*a, b);
+        }
+
+        let spec: ChordSpec = "i~II".try_into().unwrap();
+        let chord = spec.chord_for_key(&key);
+        let notes = chord.notes();
+        let expected = vec![Note {
+            semitones: 29 // D
+        }, Note {
+            semitones: 32 // F
+        }, Note {
+            semitones: 36 // A
+        }];
+        assert_eq!(notes.len(), expected.len());
+        for (a, b) in notes.iter().zip(expected) {
+            assert_eq!(*a, b);
+        }
+
+        let spec: ChordSpec = "iii~II".try_into().unwrap();
+        let chord = spec.chord_for_key(&key);
+        let notes = chord.notes();
+        let expected = vec![Note {
+            semitones: 33 // F#
+        }, Note {
+            semitones: 36 // A
+        }, Note {
+            semitones: 40 // C#
+        }];
+        assert_eq!(notes.len(), expected.len());
+        for (a, b) in notes.iter().zip(expected) {
+            assert_eq!(*a, b);
+        }
+
+        let spec: ChordSpec = "iii~ii".try_into().unwrap();
+        let chord = spec.chord_for_key(&key);
+        let notes = chord.notes();
+        let expected = vec![Note {
+            semitones: 32 // F
+        }, Note {
+            semitones: 35 // A
+        }, Note {
+            semitones: 39 // C
         }];
         assert_eq!(notes.len(), expected.len());
         for (a, b) in notes.iter().zip(expected) {

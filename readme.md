@@ -70,7 +70,7 @@ The chord naming system here is a little different than the conventional roman n
     - `_` for sustained 2 (M2+P5)
     - `5` for power chord (+P5)
     - If absent, is either major (M3+P5) or minor (m3+P5) depending on the roman numeral
-4. Optional: After `:`, additional intervals are expressed by scale degree (relative to the mode of the chord), and comma separated (optional).
+4. Optional: After `:`, additional intervals/extensions are expressed by scale degree (relative to the mode of the chord), and comma separated (optional).
     - Degrees can be prefixed with `#` or `b` to move them up or down a step
     - These _do not stack_; i.e. if you want to have a dominant 9th it needs to be written as `V:b7,9` and not `V:9`
     - Note that this is different than conventional notation, which isn't really systematic! For example, the dominant 7th is conventionally notated as `V7`; a more straightforward notation would have this mean the major 7th. Here the dominant 7th is notated as `V:b7` and the major 7th is notated as `V:7`.
@@ -86,4 +86,3 @@ The chord naming system here is a little different than the conventional roman n
     - E.g. `I>1`
 7. Optional: After `~`, specify a different relative key (you can think of this as the chord being "drawn from" that relative key)
     - E.g. `V:b7~V` is a secondary dominant (this would normally be notated `V7/V`)
-
