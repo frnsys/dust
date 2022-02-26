@@ -2,9 +2,9 @@ use regex::Regex;
 use thiserror::Error;
 use std::{fmt, str::FromStr};
 use super::note::Note;
+use super::key::{Key, Mode};
 use super::interval::Interval;
 use super::degree::{Degree, DegreeParseError};
-use super::key::{Key, Mode, MAJOR, MINOR};
 use lazy_static::lazy_static;
 
 pub const NUMERALS: [&str; 7] = ["I", "II", "III", "IV", "V", "VI", "VII"];
@@ -47,7 +47,7 @@ pub struct ChordSpec {
     extensions: Vec<Degree>,
     bass_degree: Option<Degree>,
     inversion: usize,
-    rel_key: Option<(usize, isize, Mode)>,
+    rel_key: Option<(Degree, Mode)>,
 }
 
 impl ChordSpec {
@@ -99,7 +99,7 @@ impl ChordSpec {
 
     /// Set the relative key, e.g. for secondary dominants
     pub fn key_of(mut self, degree: usize, adj: isize, mode: Mode) -> ChordSpec {
-        self.rel_key = Some((degree, adj, mode));
+        self.rel_key = Some((Degree { degree, adj }, mode));
         self
     }
 
@@ -134,19 +134,16 @@ impl ChordSpec {
     /// The actual intervals that make up this chord,
     /// relative to the chord's root
     pub fn intervals(&self) -> Vec<isize> {
-        let offset = match self.rel_key {
+        let offset = match &self.rel_key {
             None => 0,
-            Some((degree, adj, _)) => {
-                adj + match self.mode {
-                    Mode::Major => MAJOR[degree - 1 % 7],
-                    Mode::Minor => MINOR[degree - 1 % 7]
-                } as isize
+            Some((degree, _)) => {
+                degree.to_interval(&self.mode) // TODO
             }
         };
 
         let mode = match self.rel_key {
             None => self.mode,
-            Some((_, _, mode)) => mode
+            Some((_, mode)) => mode
         };
 
         let mut intervals = match self.triad {
@@ -339,7 +336,10 @@ impl FromStr for ChordSpec {
                         Some(adj) => adj.matches('#').count() as isize - adj.matches('b').count() as isize,
                         None => 0
                     };
-                    Ok(Some((degree_0 + 1, adj, mode)))
+                    Ok(Some((Degree {
+                        degree: degree_0 + 1,
+                        adj
+                    }, mode)))
                 } else {
                     Err(ChordParseError::InvalidRelKey(rel_key.to_string()))
                 }
@@ -442,18 +442,18 @@ impl fmt::Display for ChordSpec {
             }
         }
 
-        if let Some((degree, adj, mode)) = self.rel_key {
+        if let Some((degree, mode)) = &self.rel_key {
             name.push('~');
-            let numeral = NUMERALS[(degree - 1) % 7];
-            if mode == Mode::Minor {
+            let numeral = NUMERALS[(degree.degree - 1) % 7];
+            if mode == &Mode::Minor {
                 name.push_str(&numeral.to_lowercase());
             } else {
                 name.push_str(&numeral);
             }
-            let n = adj.abs() as usize;
-            if adj < 0 {
+            let n = degree.adj.abs() as usize;
+            if degree.adj < 0 {
                 name.push_str(&std::iter::repeat("b").take(n).collect::<String>());
-            } else if adj > 0 {
+            } else if degree.adj > 0 {
                 name.push_str(&std::iter::repeat("#").take(n).collect::<String>());
             }
         }
