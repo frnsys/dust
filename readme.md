@@ -61,8 +61,8 @@ See `pattern.yaml`.
 
 The chord naming system here is a little different than the conventional roman numeral system, and designed to be less ambiguous and easier to represent with ASCII text. It consists of the following parts:
 
-1. The scale degree and mode of the chord is defined by a roman numeral. Uppercase is major, lowercase is minor.
-2. Optional: `#` or `b` symbols to flatten/sharpen the degree (e.g. if in CMaj, then `IIIb` will give EbMaj).
+1. Optional: `#` or `b` symbols to flatten/sharpen the degree (e.g. if in CMaj, then `bIII` will give EbMaj).
+2. The scale degree and mode of the chord is defined by a roman numeral. Uppercase is major, lowercase is minor.
 3. Optional: The triad quality:
     - `+` for augmented (M3+a5)
     - `-` for diminished (m3+d5)
