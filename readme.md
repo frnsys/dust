@@ -86,3 +86,4 @@ The chord naming system here is a little different than the conventional roman n
     - E.g. `I>1`
 7. Optional: After `~`, specify a different relative key (you can think of this as the chord being "drawn from" that relative key)
     - E.g. `V:b7~V` is a secondary dominant (this would normally be notated `V7/V`)
+    - This lets you modulate relatively easily too, e.g.: `I vi IV VI:b7 ii VI~ii iv~ii`
