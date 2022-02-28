@@ -43,7 +43,16 @@ major:
     - I iii V iii iii V
     - I:7 iib:b7 vi:b9 iv:b9
     - I:7 i:7
-    - I vi IV VI:b7 ii I~VIIb i~V
+    - I vi IV VI:b7 ii VI~ii iv~ii
+    - I IV VIIb IIIb
+    - I vi V~ii ii V
+    - vi V IV III
+    - iv IIIb IIb I
+    - I iii V ii IV vi IIIb IIb I
+    - IV I^ I
+    - V I_ I
+    - I:7,9 IV IV:7,9 I
+    - vi:7,#9 ii:7,#9 V:b7 I/2
 minor:
   patterns:
     - i v iv V
@@ -55,4 +64,8 @@ minor:
     - i IIb VI:7 vii:7
     - i v iv i
     - i v vb iv i
+    - i VII VI V
+    - iv I^ i
+    - i VI:7,9 III:7,9 i
+    - vi:7,#9 i:7,#9
 resolution: 8
