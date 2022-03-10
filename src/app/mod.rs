@@ -42,14 +42,14 @@ impl<'a> App<'a> {
     pub fn new(template: ProgressionTemplate, midi_in_port: usize, midi_out_port: usize, save_dir: String) -> App<'a> {
         let midi = MIDIOutput::from_port(midi_out_port).unwrap();
         let midi = Arc::new(Mutex::new(midi));
-        let mut seq = Sequencer::new(midi.clone(), template, save_dir.clone());
+        let mut seq = Sequencer::new(midi.clone(), template.clone(), save_dir.clone());
         seq.connect_port(midi_in_port).unwrap();
         App {
             midi: midi.clone(),
             select: None,
             mode: Mode::Performance,
             sequencer: seq,
-            performance: Performance::new(midi.clone(), save_dir),
+            performance: Performance::new(midi.clone(), template, save_dir),
         }
     }
 

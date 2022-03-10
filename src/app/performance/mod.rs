@@ -4,7 +4,8 @@ use std::sync::{Arc, Mutex};
 use crate::file::save_to_midi_file;
 use crate::app::text_input::TextInput;
 use crate::app::chord_select::ChordSelect;
-use crate::core::{Key, Mode, ChordSpec, ChordParseError, voice_lead};
+use crate::progression::ProgressionTemplate;
+use crate::core::{Key, Mode, Duration, ChordSpec, ChordParseError, voice_lead};
 use crossterm::event::{KeyEvent, KeyCode, KeyModifiers};
 use tui::{
     text::{Span, Spans},
@@ -38,10 +39,12 @@ pub struct Performance<'a> {
 
     // Last status message
     message: &'a str,
+
+    template: ProgressionTemplate,
 }
 
 impl<'a> Performance<'a> {
-    pub fn new(midi: Arc<Mutex<MIDIOutput>>, save_dir: String) -> Performance<'a> {
+    pub fn new(midi: Arc<Mutex<MIDIOutput>>, template: ProgressionTemplate, save_dir: String) -> Performance<'a> {
         let key = Key::default();
         Performance {
             key,
@@ -51,6 +54,7 @@ impl<'a> Performance<'a> {
             mappings: Default::default(),
             message: "",
             input_mode: InputMode::Normal,
+            template,
         }
     }
 
@@ -265,6 +269,14 @@ impl<'a> Performance<'a> {
                         }
                     }
 
+                    // Generate a new random progression
+                    KeyCode::Char('R') => {
+                        let progression = self.template.gen_progression(&self.key.mode, 8, &Duration::Quarter);
+                        for (i, cs) in progression.sequence.into_iter().flatten().take(9).enumerate() {
+                            self.mappings[i] = Some(cs);
+                        }
+                    }
+
                     // Start export to MIDI flow
                     KeyCode::Char('E') => {
                         let mut text_input = TextInput::new("Path: ", |_c: char| true);
@@ -310,6 +322,7 @@ impl<'a> Performance<'a> {
             Span::raw(" [p]rogression"),
             Span::raw(" [v]oice-lead"),
             Span::raw(" [E]xport"),
+            Span::raw(" [R]andom"),
         ];
         controls
     }
