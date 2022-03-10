@@ -10,7 +10,7 @@ major:
     - I vi IV V
     - I vi ii V
     - I ii iii IV
-    - I IIIb IV
+    - I bIII IV
     - vi V IV II
     - IV I III
     - vi V I IV
@@ -27,9 +27,9 @@ major:
     - IV V vi V
     - vi IV V ii
     - vi I IV V ii iii IV V
-    - I VI iv#- V
-    - I V v#- vi IV I V
-    - I V v#- vi II IV
+    - I VI #iv- V
+    - I V #v- vi IV I V
+    - I V #v- vi II IV
     - vi ii I V
     - vi ii V I
     - I vi:7 ii:7 V
@@ -38,17 +38,17 @@ major:
     - IV ii iv V
     - IV I V III
     - vi V II IV
-    - I IIIb VIIb IV
-    - iii iiib ii
+    - I bIII bVII IV
+    - iii biii ii
     - I iii V iii iii V
-    - I:7 iib:b7 vi:b9 iv:b9
+    - I:7 bii:b7 vi:b9 iv:b9
     - I:7 i:7
     - I vi IV VI:b7 ii VI~ii iv~ii
-    - I IV VIIb IIIb
+    - I IV bVII bIII
     - I vi V~ii ii V
     - vi V IV III
-    - iv IIIb IIb I
-    - I iii V ii IV vi IIIb IIb I
+    - iv bIII bII I
+    - I iii V ii IV vi bIII bII I
     - IV I^ I
     - V I_ I
     - I:7,9 IV IV:7,9 I
@@ -61,9 +61,9 @@ minor:
     - i VII VI V
     - i III IV VI
     - i III iv VI
-    - i IIb VI:7 vii:7
+    - i bII VI:7 vii:7
     - i v iv i
-    - i v vb iv i
+    - i v bv iv i
     - i VII VI V
     - iv I^ i
     - i VI:7,9 III:7,9 i
