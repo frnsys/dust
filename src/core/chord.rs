@@ -264,7 +264,7 @@ impl FromStr for ChordSpec {
     type Err = ChordParseError;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let caps = CHORD_RE.captures(s).ok_or(ChordParseError::InvalidChord(s.to_string()))?;
-        println!("{:?}", caps);
+        // println!("{:?}", caps);
         let adj = caps.get(1).and_then(|m| Some(m.as_str()));
         let numeral = caps.get(2)
             .ok_or(ChordParseError::InvalidNumeral("(none)".to_string()))?
