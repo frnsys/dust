@@ -40,10 +40,42 @@ Tips:
 - Use `R` to generate a new chord progression, or `S` to generate one from a starting chord.
 - With a chord selected in the grid, use `U` and `D` to browse chords.
 
+### Strumming
+
+Both modes can play chords as strums instead of block chords. Press `t` to pick a strum pattern (or `off`). In sequencer mode the pattern loops over the progression in time with the DAW clock, and chords ring until the next stroke re-strikes them. In performance mode each key press is a single down stroke.
+
+Strums are humanized: each stroke is spread across the chord's notes like strings (low to high on a down stroke, high to low and only the top strings on an up stroke), with small random timing and velocity variations, softer up strokes, accents, optional swing, and so on. The chord is voiced across 6 "strings" by default, stacking chord tones upward from the bass note.
+
+Strum patterns live in `~/.config/dust/strums.yaml` (or pass `--strums <file>`); if there is no such file the built-in library in `strums.yaml` is used. A pattern is a whitespace-separated list of beats, and the characters within a beat subdivide it evenly:
+
+```yaml
+defaults:        # parameters applied to every pattern
+  spread_ms: 35
+patterns:
+  - name: folk
+    pattern: "d. du .u du"   # 4 beats of eighths: down, rest, down, up, rest, up, down, up
+  - name: shuffle
+    pattern: "d. du d. du"
+    swing: 0.65              # per-pattern parameter overrides
+  - name: triplets
+    pattern: "dud dud"       # three characters in a beat make a triplet
+```
+
+Tokens: `d`/`u` down/up stroke, `D`/`U` accented, `b` bass note (alternating between the two lowest strings), `x` mute (damp, with a short percussive hit), `.` rest (let ring), `|` optional bar separator. The parameters (strum spread, timing and velocity jitter, swing, number of strings, etc.) are documented in `src/strum/params.rs`.
+
+To hear a pattern without a DAW, render it to a MIDI file and play that through a synth:
+
+```
+dust render "I V vi IV" --strum folk --bpm 100 --program 25 --out folk.mid
+dust render "I V vi IV" --strum folk --bpm 100 --program 25 --quantized --out folk-quantized.mid   # for A/B comparison
+dust render "I V vi IV" --pattern "d.du .udu" --set spread_ms=60 --set swing=0.3 --out custom.mid
+fluidsynth -ni -F folk.wav /usr/share/sounds/sf2/FluidR3_GM.sf2 folk.mid
+```
+
 ### General tips
 
 - Use `v` to apply a voice-leading algorithm to the chord progression. This looks for inversions that minimize finger movement across the progression.
-- Use `E` to export to a MIDI file.
+- Use `E` to export to a MIDI file. With a strum pattern selected, the export is strummed too.
 
 ### Defining chord progression patterns
 

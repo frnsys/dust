@@ -5,11 +5,20 @@ const QUARTERS_PER_BAR: usize = 4;
 
 // 24 clock events sent per quarter note
 // https://en.wikipedia.org/wiki/MIDI_beat_clock
-const TICKS_PER_QUARTER: usize = 24;
+pub const TICKS_PER_QUARTER: usize = 24;
+pub const TICKS_PER_BAR: usize = QUARTERS_PER_BAR * TICKS_PER_QUARTER;
 
-#[derive(Debug, PartialEq, Eq)]
+/// Tempo assumed until enough clock pulses have arrived to measure it.
+const DEFAULT_BPM: f64 = 120.0;
+
+/// Smoothing factor for the tick interval estimate.
+const TEMPO_SMOOTHING: f64 = 0.1;
+
+#[derive(Debug, PartialEq)]
 pub enum ClockEvent {
-    Tick(usize),
+    /// A clock pulse. `tick` counts from 0 at the downbeat of each bar
+    /// and `ms_per_tick` is the current estimate of the pulse interval.
+    Tick { tick: usize, ms_per_tick: f64 },
     Start,
     Stop,
 }
@@ -41,23 +50,34 @@ impl MIDIClock {
     /// clock/start/stop messages into `ClockEvent`s.
     fn handler<F>(mut tick_fn: F) -> impl FnMut(u64, &[u8], &mut ()) + Send + 'static
         where F: FnMut(ClockEvent) + Send + 'static {
+        // Per the MIDI spec, the first clock pulse after Start is the downbeat.
         let mut tick = 0;
         let mut playing = false;
-        move |_, msg, _| {
+        let mut last_stamp: Option<u64> = None;
+        let mut ms_per_tick = 60_000.0 / DEFAULT_BPM / TICKS_PER_QUARTER as f64;
+        move |stamp_us, msg, _| {
             let ev = match msg {
                 [248] => {
-                    if playing {
-                        tick += 1;
-                        if tick >= QUARTERS_PER_BAR * TICKS_PER_QUARTER {
-                            tick = 0;
+                    if let Some(last) = last_stamp {
+                        let interval = (stamp_us.saturating_sub(last)) as f64 / 1000.0;
+                        // Ignore the gap across a stop/start or a stall
+                        if interval > 0.0 && interval < ms_per_tick * 4.0 {
+                            ms_per_tick += TEMPO_SMOOTHING * (interval - ms_per_tick);
                         }
-                        Some(ClockEvent::Tick(tick))
+                    }
+                    last_stamp = Some(stamp_us);
+                    if playing {
+                        let ev = ClockEvent::Tick { tick, ms_per_tick };
+                        tick = (tick + 1) % TICKS_PER_BAR;
+                        Some(ev)
                     } else {
                         None
                     }
                 },
                 [250] => {
                     playing = true;
+                    tick = 0;
+                    last_stamp = None;
                     Some(ClockEvent::Start)
                 },
                 [252] => {

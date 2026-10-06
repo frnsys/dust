@@ -1,11 +1,20 @@
 use anyhow::Result;
 use crate::midi::MIDIOutput;
 use std::sync::{Arc, Mutex};
+use std::time::Instant;
 use crate::file::save_to_midi_file;
 use crate::app::text_input::TextInput;
 use crate::app::chord_select::ChordSelect;
+use crate::app::select::Select;
 use crate::progression::ProgressionTemplate;
-use crate::core::{Key, Mode, Duration, ChordSpec, ChordParseError, voice_lead};
+use crate::core::{Key, Mode, Duration, Chord, ChordSpec, ChordParseError, voice_lead};
+use crate::strum::{StrumLibrary, Strummer, StrokeEvent, Stroke, NoteEvent, render_strummed, render_block};
+
+/// How long one unit of `note_duration` lasts.
+const DURATION_UNIT_MS: f64 = 150.0;
+
+/// Tempo assumed for exports and strum timing in this mode.
+const BPM: f64 = 120.0;
 use ratatui::crossterm::event::{KeyEvent, KeyCode, KeyModifiers};
 use ratatui::{
     text::{Span, Line},
@@ -18,6 +27,11 @@ enum InputMode<'a> {
     Normal,
     Text(TextInput<'a>, TextTarget),
     Chord(ChordSelect<'a>, usize),
+    Select(Select, SelectTarget),
+}
+
+enum SelectTarget {
+    Strum,
 }
 
 enum TextTarget {
@@ -41,10 +55,25 @@ pub struct Performance<'a> {
     message: &'a str,
 
     template: ProgressionTemplate,
+
+    strum_library: StrumLibrary,
+    /// Index of the selected strum preset, if strumming is on.
+    strum: Option<usize>,
+    strummer: Strummer,
+}
+
+/// A single down stroke of `chord`, held for `hold_ms`.
+fn strum_once(strummer: &mut Strummer, chord: &Chord, hold_ms: f64) -> Vec<NoteEvent> {
+    strummer.reset();
+    let stroke = StrokeEvent { beat: 0.0, stroke: Stroke::Down, accent: false };
+    let beat_ms = 60_000.0 / BPM;
+    let mut events = strummer.stroke(&stroke, Some(&chord.midi_notes()), 0.0, beat_ms, hold_ms / beat_ms);
+    events.extend(strummer.release_all(hold_ms));
+    events
 }
 
 impl<'a> Performance<'a> {
-    pub fn new(midi: Arc<Mutex<MIDIOutput>>, template: ProgressionTemplate, save_dir: String) -> Performance<'a> {
+    pub fn new(midi: Arc<Mutex<MIDIOutput>>, template: ProgressionTemplate, strum_library: StrumLibrary, save_dir: String) -> Performance<'a> {
         let key = Key::default();
         Performance {
             key,
@@ -55,6 +84,35 @@ impl<'a> Performance<'a> {
             message: "",
             input_mode: InputMode::Normal,
             template,
+            strummer: Strummer::from_entropy(strum_library.defaults.clone()),
+            strum_library,
+            strum: None,
+        }
+    }
+
+    fn set_strum(&mut self, idx: Option<usize>) {
+        self.strum = idx.filter(|i| *i < self.strum_library.presets.len());
+        if let Some(i) = self.strum {
+            self.strummer = Strummer::from_entropy(self.strum_library.presets[i].params.clone());
+        }
+    }
+
+    fn strum_name(&self) -> String {
+        match self.strum {
+            Some(i) => self.strum_library.presets[i].name.clone(),
+            None => "off".to_string(),
+        }
+    }
+
+    /// Play a chord: a strummed down stroke if strumming is on, else a block chord.
+    fn play_chord(&mut self, chord: &Chord) {
+        let mut midi = self.midi.lock().unwrap();
+        if self.strum.is_some() {
+            let hold = self.note_duration as f64 * DURATION_UNIT_MS;
+            let events = strum_once(&mut self.strummer, chord, hold);
+            midi.schedule(Instant::now(), &events);
+        } else {
+            midi.play_chord(chord, self.note_duration);
         }
     }
 
@@ -88,6 +146,19 @@ impl<'a> Performance<'a> {
         rects.push((message, chunks[1]));
 
         match &self.input_mode {
+            InputMode::Select(select, _) => {
+                let display_chunks = Layout::default()
+                    .direction(Direction::Horizontal)
+                    .margin(2)
+                    .constraints([
+                            Constraint::Ratio(1, 2),
+                            Constraint::Ratio(1, 2),
+                        ].as_ref())
+                    .split(chunks[0]);
+                let height = display_chunks[1].height as usize;
+                rects.push((select.render(height), display_chunks[1]));
+                rects.push((render_mappings(&self.key, &self.mappings, None), display_chunks[0]));
+            }
             InputMode::Chord(select, idx) => {
                 let display_chunks = Layout::default()
                     .direction(Direction::Horizontal)
@@ -114,8 +185,21 @@ impl<'a> Performance<'a> {
     }
 
     pub fn process_input(&mut self, key: KeyEvent) -> Result<()> {
-        let mut midi = self.midi.lock().unwrap();
         match &mut self.input_mode {
+            InputMode::Select(select, target) => {
+                let (selection, close) = select.process_input(key)?;
+                if close {
+                    if let Some(selected) = selection {
+                        match target {
+                            SelectTarget::Strum => {
+                                // First choice is "off"
+                                self.set_strum(selected.checked_sub(1));
+                            }
+                        }
+                    }
+                    self.input_mode = InputMode::Normal;
+                }
+            }
             InputMode::Text(text_input, target) => {
                 let (input, close) = text_input.process_input(key)?;
                 if close {
@@ -147,17 +231,18 @@ impl<'a> Performance<'a> {
                                 }
                             }
                             TextTarget::Export => {
-                                let chords = self.mappings.iter().map(|m| {
-                                    match m {
-                                        Some(cs) => Some(cs.chord_for_key(&self.key)),
-                                        None => None
+                                // One chord per beat
+                                let steps: Vec<Option<Vec<u8>>> = self.mappings.iter()
+                                    .map(|m| m.as_ref().map(|cs| cs.chord_for_key(&self.key).midi_notes()))
+                                    .collect();
+                                let events = match self.strum {
+                                    Some(i) => {
+                                        let preset = &self.strum_library.presets[i];
+                                        render_strummed(&steps, 1, &preset.pattern, &preset.params, BPM, 1, rand::random())
                                     }
-                                }).collect();
-                                let result = save_to_midi_file(
-                                    120, // default tempo
-                                    2,   // default ticks per beat
-                                    &chords,
-                                    input);
+                                    None => render_block(&steps, 1, BPM, 60_000.0 / BPM, 100, 1),
+                                };
+                                let result = save_to_midi_file(BPM, &events, input);
                                 match result {
                                     Ok(_) => {
                                         self.message = "Saved file";
@@ -175,10 +260,11 @@ impl<'a> Performance<'a> {
             InputMode::Chord(chord_select, idx) => {
                 match chord_select.process_input(key) {
                     Ok((sel, close)) => {
+                        let idx = *idx;
                         if let Some(cs) = sel {
                             let chord = cs.chord_for_key(&self.key);
-                            midi.play_chord(&chord, self.note_duration);
-                            self.mappings[*idx] = Some(cs);
+                            self.mappings[idx] = Some(cs);
+                            self.play_chord(&chord);
                         }
                         if close {
                             self.input_mode = InputMode::Normal;
@@ -190,7 +276,7 @@ impl<'a> Performance<'a> {
                                     let idx = c.to_string().parse::<usize>()? - 1;
                                     if let Some(cs) = &self.mappings[idx] {
                                         let chord = cs.chord_for_key(&self.key);
-                                        midi.play_chord(&chord, self.note_duration);
+                                        self.play_chord(&chord);
                                     }
                                 }
                             }
@@ -250,6 +336,15 @@ impl<'a> Performance<'a> {
                         };
                     }
 
+                    // Choose a strum pattern
+                    KeyCode::Char('t') => {
+                        let mut choices = vec!["off".to_string()];
+                        choices.extend(self.strum_library.names());
+                        let mut select = Select::new(choices);
+                        select.idx = self.strum.map(|i| i + 1).unwrap_or(0);
+                        self.input_mode = InputMode::Select(select, SelectTarget::Strum);
+                    }
+
                     // Enter a progression, space-delimited
                     KeyCode::Char('p') => {
                         self.input_mode = InputMode::Text(
@@ -292,7 +387,7 @@ impl<'a> Performance<'a> {
                             let idx = c.to_string().parse::<usize>()? - 1;
                             if let Some(cs) = &self.mappings[idx] {
                                 let chord = cs.chord_for_key(&self.key);
-                                midi.play_chord(&chord, self.note_duration);
+                                self.play_chord(&chord);
                             }
                         }
                     }
@@ -314,6 +409,8 @@ impl<'a> Performance<'a> {
             Span::styled(self.note_duration.to_string(), param_style),
             Span::raw(" [m]ode:"),
             Span::styled(self.key.mode.to_string(), param_style),
+            Span::raw(" s[t]rum:"),
+            Span::styled(self.strum_name(), param_style),
         ];
         params
     }

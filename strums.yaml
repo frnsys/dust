@@ -1,0 +1,100 @@
+# Strum pattern library.
+#
+# Patterns are written as whitespace-separated beats. The characters within
+# a beat subdivide it evenly: "d." is two eighths (down stroke, rest),
+# "dud" is a triplet, "d.du" is four sixteenths. "|" can be used as a bar
+# separator and is ignored.
+#
+# Tokens:
+#   d / u   down stroke / up stroke
+#   D / U   accented down stroke / up stroke
+#   b / B   bass note (alternating between the two lowest strings) / accented
+#   x / X   mute: damp the strings, with a short percussive hit
+#   .       rest (strings keep ringing)
+#
+# `defaults` sets the parameters for every pattern; each pattern may
+# override any of them. See `StrumParams` in src/strum/params.rs for
+# the full list and what they do.
+
+defaults:
+  strings: 6
+  up_strings: 4
+  spread_ms: 35
+  anchor: 0.5
+  timing_jitter_ms: 6
+  up_late_ms: 4
+  velocity: 92
+  velocity_jitter: 6
+
+patterns:
+  - name: downs
+    pattern: "d d d d"
+
+  - name: eighths
+    pattern: "du du du du"
+
+  - name: updown-sixteenths
+    pattern: "dudu dudu dudu dudu"
+
+  - name: folk
+    pattern: "d. du .u du"
+
+  - name: folk-2
+    pattern: "d. du .u du | d. du .u du"
+    spread_ms: 45
+
+  - name: campfire
+    pattern: "D. du .u du"
+    accent_velocity: 1.25
+
+  - name: bass-strum
+    pattern: "b du b du"
+
+  - name: country
+    pattern: "b d b d"
+    spread_ms: 25
+
+  - name: shuffle
+    pattern: "d. du d. du"
+    swing: 0.65
+
+  - name: reggae
+    pattern: ". u . u"
+    up_strings: 3
+    spread_ms: 20
+
+  - name: ska
+    pattern: ".u .u .u .u"
+    up_strings: 3
+    spread_ms: 15
+    up_velocity: 0.9
+
+  - name: chop
+    pattern: "d. xu d. xu"
+
+  - name: sixteenths
+    pattern: "d.du .udu d.du .udu"
+    spread_ms: 25
+
+  - name: funk
+    pattern: "d.du xudu d.xu xudu"
+    spread_ms: 15
+    up_strings: 3
+    mute_ms: 25
+
+  - name: ballad
+    pattern: "d . . . d . d ."
+    spread_ms: 90
+    anchor: 0.8
+    velocity: 80
+
+  # A 3-beat pattern phases against the 4/4 grid
+  - name: waltz
+    pattern: "D u u"
+
+  - name: lazy
+    pattern: "d . d u"
+    spread_ms: 120
+    anchor: 0.7
+    spread_jitter: 0.4
+    timing_jitter_ms: 12

@@ -4,8 +4,10 @@ mod progression;
 
 use anyhow::Result;
 use std::sync::{Arc, Mutex};
+use std::time::Instant;
 use crate::core::{Duration, Mode};
 use crate::file::save_to_midi_file;
+use crate::strum::{StrumLibrary, render_strummed, render_block};
 use crate::app::text_input::TextInput;
 use crate::app::chord_select::ChordSelect;
 use crate::app::select::Select;
@@ -41,6 +43,7 @@ pub enum TextTarget {
 
 enum SelectTarget {
     Resolution,
+    Strum,
 }
 
 pub struct Sequencer<'a> {
@@ -63,8 +66,8 @@ pub struct Sequencer<'a> {
 
 
 impl<'a> Sequencer<'a> {
-    pub fn new(midi: Arc<Mutex<MIDIOutput>>, template: ProgressionTemplate, save_dir: String) -> Sequencer<'a> {
-        let state = PlaybackState::new(&template);
+    pub fn new(midi: Arc<Mutex<MIDIOutput>>, template: ProgressionTemplate, strum_library: StrumLibrary, save_dir: String) -> Sequencer<'a> {
+        let state = PlaybackState::new(&template, strum_library);
         let ticks_per_bar = state.resolution.ticks_per_bar();
 
         Sequencer {
@@ -97,29 +100,23 @@ impl<'a> Sequencer<'a> {
     fn clock_handler(&self) -> impl FnMut(ClockEvent) + Send + 'static {
         let state = self.state.clone();
         let midi = self.midi.clone();
-        move |tick| {
+        move |ev| {
             let mut s = state.lock().unwrap();
-            let emit_ticks = match s.resolution {
-                Duration::Quarter => 24,
-                Duration::Eighth => 12,
-                Duration::Sixteenth => 6,
-                Duration::ThirtySecond => 3,
-            };
-            match tick {
-                ClockEvent::Tick(i) => {
-                    if i % emit_ticks == 0 {
-                        // Send MIDI data
-                        // There might be some timing issues here b/c of the tick rate
-                        if let Some((chord, duration)) = s.current_chord() {
-                            midi.lock().unwrap().play_chord(&chord, duration);
-                        }
-                        s.tick();
+            match ev {
+                ClockEvent::Tick { ms_per_tick, .. } => {
+                    let now = Instant::now();
+                    let events = s.on_clock_tick(ms_per_tick);
+                    if !events.is_empty() {
+                        midi.lock().unwrap().schedule(now, &events);
                     }
                 },
-                ClockEvent::Stop => {
-                    s.reset_tick();
+                ClockEvent::Start => {
+                    s.reset_playback();
                 },
-                _ => {}
+                ClockEvent::Stop => {
+                    s.reset_playback();
+                    midi.lock().unwrap().all_notes_off();
+                },
             }
         }
     }
@@ -209,6 +206,12 @@ impl<'a> Sequencer<'a> {
                                 }
                                 self.ticks_per_bar = res.ticks_per_bar();
                             }
+                            SelectTarget::Strum => {
+                                let mut s = self.state.lock().unwrap();
+                                // First choice is "off"
+                                s.set_strum(selected.checked_sub(1));
+                                self.midi.lock().unwrap().all_notes_off();
+                            }
                         }
                     }
                     self.input_mode = InputMode::Normal;
@@ -239,11 +242,19 @@ impl<'a> Sequencer<'a> {
                                 s.gen_progression(&self.template)?;
                             }
                             TextTarget::Export => {
-                                let result = save_to_midi_file(
-                                    120, // TODO
-                                    s.progression.resolution.ticks_per_beat(),
-                                    &s.progression.in_key(&s.key),
-                                    input);
+                                let steps: Vec<Option<Vec<u8>>> = s.progression.in_key(&s.key)
+                                    .iter().map(|c| c.as_ref().map(|c| c.midi_notes())).collect();
+                                let steps_per_beat = s.progression.resolution.ticks_per_beat();
+                                let bpm = s.bpm.round();
+                                let events = match s.strum_pattern() {
+                                    Some(pattern) => render_strummed(
+                                        &steps, steps_per_beat, pattern, s.strum_params(),
+                                        bpm, 1, rand::random()),
+                                    None => render_block(
+                                        &steps, steps_per_beat, bpm,
+                                        s.note_duration as f64 * state::DURATION_UNIT_MS, 100, 1),
+                                };
+                                let result = save_to_midi_file(bpm, &events, input);
                                 match result {
                                     Ok(_) => {
                                         self.message = "Saved file";
@@ -312,6 +323,16 @@ impl<'a> Sequencer<'a> {
                         self.input_mode = InputMode::Text(
                             TextInput::new("Duration: ", |c: char| c.is_numeric()),
                             TextTarget::Duration);
+                    }
+
+                    // Choose a strum pattern
+                    KeyCode::Char('t') => {
+                        self.message = "";
+                        let mut choices = vec!["off".to_string()];
+                        choices.extend(self.state.lock().unwrap().strum_library.names());
+                        let mut select = Select::new(choices);
+                        select.idx = self.state.lock().unwrap().strum.map(|i| i + 1).unwrap_or(0);
+                        self.input_mode = InputMode::Select(select, SelectTarget::Strum);
                     }
 
                     KeyCode::Char('s') => {
@@ -392,6 +413,8 @@ impl<'a> Sequencer<'a> {
             Span::styled(s.resolution.to_string(), param_style),
             Span::raw(" [m]ode:"),
             Span::styled(s.key.mode.to_string(), param_style),
+            Span::raw(" s[t]rum:"),
+            Span::styled(s.strum_name(), param_style),
         ]
     }
 

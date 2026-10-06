@@ -1,32 +1,88 @@
 use anyhow::Result;
 use super::MIDIError;
 use crate::core::Chord;
+use crate::strum::{NoteEvent, EventKind};
 use midir::{MidiOutput, MidiOutputConnection, os::unix::VirtualOutput};
-use std::{thread, sync::{Arc, Mutex}};
-use std::{thread::sleep, time::Duration};
-use std::collections::HashMap;
+use std::cmp::Ordering;
+use std::collections::{BinaryHeap, HashMap, HashSet};
+use std::sync::{Arc, Mutex, Condvar};
+use std::thread;
+use std::time::{Duration, Instant};
 
 const VELOCITY: u8 = 0x64;
+const OFF_VELOCITY: u8 = 0x40;
 const NOTE_ON_MSG: u8 = 0x90;
 const NOTE_OFF_MSG: u8 = 0x80;
 
-pub struct MIDIOutput {
-    pub name: Option<String>,
-    conn: Arc<Mutex<Option<MidiOutputConnection>>>,
+/// How long one unit of `play_chord`'s duration lasts.
+const DURATION_UNIT_MS: u64 = 150;
 
-    // We use this to determine when a note off
-    // signal should be sent, to avoid conflicts
-    note_owners: Arc<Mutex<HashMap<u8, usize>>>,
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Msg {
+    /// `generation` counts note ons scheduled per note. A note off carries
+    /// the generation of the note on it belongs to, so that it doesn't cut
+    /// short a later re-trigger of the same note.
+    On { note: u8, velocity: u8, generation: u64 },
+    Off { note: u8, generation: u64 },
 }
 
+#[derive(Debug, PartialEq, Eq)]
+struct Scheduled {
+    at: Instant,
+    seq: u64,
+    msg: Msg,
+}
+
+// Reverse ordering so the BinaryHeap pops the earliest event first.
+impl Ord for Scheduled {
+    fn cmp(&self, other: &Self) -> Ordering {
+        other.at.cmp(&self.at).then_with(|| other.seq.cmp(&self.seq))
+    }
+}
+impl PartialOrd for Scheduled {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+#[derive(Default)]
+struct Queue {
+    heap: BinaryHeap<Scheduled>,
+    seq: u64,
+    /// Latest generation scheduled per note.
+    scheduled: HashMap<u8, u64>,
+    /// Latest generation actually sent per note.
+    sent: HashMap<u8, u64>,
+    /// Notes that are currently on.
+    sounding: HashSet<u8>,
+}
+
+type Conn = Arc<Mutex<Option<MidiOutputConnection>>>;
+
+fn send(conn: &Conn, msg: &[u8]) {
+    if let Some(conn) = conn.lock().unwrap().as_mut() {
+        let _ = conn.send(msg);
+    }
+}
+
+/// MIDI output with a scheduler: note events are queued with precise
+/// times and sent by a background thread.
+pub struct MIDIOutput {
+    pub name: Option<String>,
+    conn: Conn,
+    queue: Arc<(Mutex<Queue>, Condvar)>,
+}
 
 impl MIDIOutput {
     pub fn new() -> MIDIOutput {
-        MIDIOutput {
-            name: None,
-            conn: Arc::new(Mutex::new(None)),
-            note_owners: Arc::new(Mutex::new(HashMap::default())),
+        let conn: Conn = Arc::new(Mutex::new(None));
+        let queue = Arc::new((Mutex::new(Queue::default()), Condvar::new()));
+        {
+            let conn = conn.clone();
+            let queue = queue.clone();
+            thread::spawn(move || scheduler_loop(conn, queue));
         }
+        MIDIOutput { name: None, conn, queue }
     }
 
     pub fn from_port(port: usize) -> Result<MIDIOutput, MIDIError> {
@@ -41,14 +97,6 @@ impl MIDIOutput {
         let mut m = MIDIOutput::new();
         m.create_virtual(name)?;
         Ok(m)
-    }
-
-    pub fn create_virtual(&mut self, name: &str) -> Result<(), MIDIError> {
-        let out = self.output()?;
-        let conn_out = out.create_virtual(name)?;
-        let _ = self.conn.clone().lock().unwrap().insert(conn_out);
-        self.name = Some(name.to_string());
-        Ok(())
     }
 
     fn output(&self) -> Result<MidiOutput, MIDIError> {
@@ -69,102 +117,122 @@ impl MIDIOutput {
         } else {
             let port_names = self.available_ports()?;
             let conn_out = out.connect(&out_ports[idx], "dust")?;
-            let _ = self.conn.clone().lock().unwrap().insert(conn_out);
+            self.all_notes_off();
+            let _ = self.conn.lock().unwrap().insert(conn_out);
             self.name = Some(port_names[idx].to_string());
             Ok(())
         }
     }
 
+    pub fn create_virtual(&mut self, name: &str) -> Result<(), MIDIError> {
+        let out = self.output()?;
+        let conn_out = out.create_virtual(name)?;
+        let _ = self.conn.lock().unwrap().insert(conn_out);
+        self.name = Some(name.to_string());
+        Ok(())
+    }
+
+    /// Schedule note events. Times are milliseconds relative to `base`;
+    /// anything already in the past is sent as soon as possible.
+    pub fn schedule(&self, base: Instant, events: &[NoteEvent]) {
+        let now = Instant::now();
+        let (queue, cv) = &*self.queue;
+        let mut q = queue.lock().unwrap();
+        for ev in events {
+            let at = if ev.at_ms <= 0.0 {
+                base
+            } else {
+                base + Duration::from_secs_f64(ev.at_ms / 1000.0)
+            };
+            let at = at.max(now);
+            let msg = match ev.kind {
+                EventKind::On(velocity) => {
+                    let generation = q.scheduled.entry(ev.note).or_insert(0);
+                    *generation += 1;
+                    Msg::On { note: ev.note, velocity, generation: *generation }
+                }
+                EventKind::Off => {
+                    let generation = q.scheduled.get(&ev.note).copied().unwrap_or(0);
+                    Msg::Off { note: ev.note, generation }
+                }
+            };
+            q.seq += 1;
+            let seq = q.seq;
+            q.heap.push(Scheduled { at, seq, msg });
+        }
+        cv.notify_one();
+    }
+
+    /// Play a block chord now, held for `duration` units.
     pub fn play_chord(&mut self, chord: &Chord, duration: u64) {
-        // MIDI note values map A0 to 21.
-        // We set A0 to 0 semitones; this our starting point is 0 semitones = MIDI note 21.
-        let notes: Vec<u8> = chord.notes().iter().map(|note| (note.semitones + 21) as u8).collect();
-        self.play_notes(notes, duration);
+        self.play_notes(chord.midi_notes(), duration);
     }
 
     pub fn play_notes(&mut self, notes: Vec<u8>, duration: u64) {
-        let conn = self.conn.clone();
-
-        // When we play a set of notes, we need to track
-        // which thread has the right to stop those notes
-        // (i.e. send the notes off message).
-        // This is to avoid the following scenario:
-        // - t=0.0: Thread A plays CEG for 1 second
-        // - t=0.5: Thread B plays CEG again
-        // - t=1.0: Thread A stops CEG, prematurely ending thread B's CEG by 0.5 seconds
-        // Here we assign a number to each thread that plays a given note.
-        // Then before that thread stops its notes, it checks to see if it
-        // is the owner (has the highest number) of those notes.
-        // For simplicity just saying one note (C) but this applies for multiple notes too.
-        // - t=0.0: Thread A plays C for 1 second and is assigned #1.
-        // - t=0.5: Thread B plays C again and is assigned #2
-        // - t=1.0: Thread A wants to stop C, so it compares its number (#1)
-        //  against C's current number (#2). Because #1 < #2, thread A doesn't stop C.
-        // - t=1.5: Thread B wants to stop C, so it compares its number (#2)
-        //  against C's current number (#2). Because #2 = #2, thread A can stop C.
-        let mut my_notes: HashMap<u8, usize> = HashMap::default();
-        for note in &notes {
-            let mut note_owners = self.note_owners.lock().unwrap();
-            let n = note_owners.entry(*note).or_insert(0);
-            *n += 1;
-            my_notes.insert(*note, *n);
+        let hold = (duration * DURATION_UNIT_MS) as f64;
+        let mut events = vec![];
+        for note in notes {
+            events.push(NoteEvent::on(0.0, note, VELOCITY));
+            events.push(NoteEvent::off(hold, note));
         }
-        let note_owners = self.note_owners.clone();
+        self.schedule(Instant::now(), &events);
+    }
 
-        let _handler = thread::spawn(move || {
-            {
-                let mut conn = conn.lock().unwrap();
-                if let Some(ref mut conn) = *conn {
-                    for note in &notes {
-                        let _ = conn.send(&[NOTE_ON_MSG, *note, VELOCITY]);
-                    }
-                }
+    /// Drop everything scheduled and silence every sounding note.
+    pub fn all_notes_off(&self) {
+        let (queue, _) = &*self.queue;
+        let mut q = queue.lock().unwrap();
+        q.heap.clear();
+        for note in q.sounding.drain() {
+            send(&self.conn, &[NOTE_OFF_MSG, note, OFF_VELOCITY]);
+        }
+    }
+
+    pub fn close(&mut self) -> Result<()> {
+        self.all_notes_off();
+        Ok(())
+    }
+}
+
+impl Default for MIDIOutput {
+    fn default() -> Self {
+        MIDIOutput::new()
+    }
+}
+
+fn scheduler_loop(conn: Conn, queue: Arc<(Mutex<Queue>, Condvar)>) {
+    let (queue, cv) = &*queue;
+    let mut q = queue.lock().unwrap();
+    loop {
+        let now = Instant::now();
+        match q.heap.peek() {
+            None => {
+                q = cv.wait(q).unwrap();
             }
-            sleep(Duration::from_millis(duration * 150));
-            {
-                let mut conn = conn.lock().unwrap();
-                if let Some(ref mut conn) = *conn {
-                    let owners = note_owners.lock().unwrap();
-                    for note in &notes {
-                        let my_number = my_notes.get(note).unwrap();
-                        if my_number >= owners.get(note).unwrap() {
-                            let _ = conn.send(&[NOTE_OFF_MSG, *note, VELOCITY]);
+            Some(next) if next.at > now => {
+                let wait = next.at - now;
+                q = cv.wait_timeout(q, wait).unwrap().0;
+            }
+            Some(_) => {
+                let ev = q.heap.pop().unwrap();
+                match ev.msg {
+                    Msg::On { note, velocity, generation } => {
+                        let sent = q.sent.entry(note).or_insert(0);
+                        *sent = (*sent).max(generation);
+                        q.sounding.insert(note);
+                        send(&conn, &[NOTE_ON_MSG, note, velocity]);
+                    }
+                    Msg::Off { note, generation } => {
+                        // Skip if a newer note on for this note was already
+                        // sent: that one owns the note now.
+                        let sent = q.sent.get(&note).copied().unwrap_or(0);
+                        if sent <= generation {
+                            q.sounding.remove(&note);
+                            send(&conn, &[NOTE_OFF_MSG, note, OFF_VELOCITY]);
                         }
                     }
                 }
             }
-        });
-    }
-
-    pub fn play_note(&mut self, note: u8, duration: u64) {
-        let conn = self.conn.clone();
-        let _handler = thread::spawn(move || {
-            {
-                let mut conn = conn.lock().unwrap();
-                if let Some(ref mut conn) = *conn {
-                    let _ = conn.send(&[NOTE_ON_MSG, note, VELOCITY]);
-                }
-            }
-            sleep(Duration::from_millis(duration * 150));
-            {
-                let mut conn = conn.lock().unwrap();
-                if let Some(ref mut conn) = *conn {
-                    let _ = conn.send(&[NOTE_OFF_MSG, note, VELOCITY]);
-                }
-            }
-        });
-    }
-
-    pub fn close(&mut self) -> Result<()> {
-        let conn = self.conn.clone();
-        let mut conn = conn.lock().unwrap();
-
-        if let Some(ref mut conn) = *conn {
-            let note_owners = self.note_owners.lock().unwrap();
-            for note in note_owners.keys() {
-                let _ = conn.send(&[NOTE_OFF_MSG, *note, VELOCITY]);
-            }
         }
-        Ok(())
     }
 }

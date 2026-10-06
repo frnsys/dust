@@ -11,6 +11,7 @@ use std::{
 };
 use crate::midi::MIDIOutput;
 use crate::progression::ProgressionTemplate;
+use crate::strum::StrumLibrary;
 use ratatui::{
     Terminal,
     backend::Backend,
@@ -46,13 +47,13 @@ pub struct App<'a> {
 impl<'a> App<'a> {
     /// If a port index is `None`, a virtual port is created instead
     /// of connecting to an existing one.
-    pub fn new(template: ProgressionTemplate, midi_in_port: Option<usize>, midi_out_port: Option<usize>, save_dir: String) -> App<'a> {
+    pub fn new(template: ProgressionTemplate, strum_library: StrumLibrary, midi_in_port: Option<usize>, midi_out_port: Option<usize>, save_dir: String) -> App<'a> {
         let midi = match midi_out_port {
             Some(idx) => MIDIOutput::from_port(idx),
             None => MIDIOutput::from_virtual(VIRTUAL_OUT_PORT),
         }.unwrap();
         let midi = Arc::new(Mutex::new(midi));
-        let mut seq = Sequencer::new(midi.clone(), template.clone(), save_dir.clone());
+        let mut seq = Sequencer::new(midi.clone(), template.clone(), strum_library.clone(), save_dir.clone());
         match midi_in_port {
             Some(idx) => seq.connect_port(idx),
             None => seq.create_virtual_port(VIRTUAL_IN_PORT),
@@ -62,7 +63,7 @@ impl<'a> App<'a> {
             select: None,
             mode: Mode::Performance,
             sequencer: seq,
-            performance: Performance::new(midi.clone(), template, save_dir),
+            performance: Performance::new(midi.clone(), template, strum_library, save_dir),
         }
     }
 

@@ -481,6 +481,12 @@ impl Chord {
         notes
     }
 
+    /// MIDI note numbers for the chord's notes, lowest first.
+    /// MIDI maps A0 to 21, and 0 semitones here is A0.
+    pub fn midi_notes(&self) -> Vec<u8> {
+        self.notes().iter().map(|note| (note.semitones + 21) as u8).collect()
+    }
+
     pub fn describe_notes(&self) -> Vec<String> {
         self.notes().iter().map(|n| n.to_string()).collect()
     }
