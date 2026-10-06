@@ -41,21 +41,24 @@ pub fn sort_events(events: &mut [NoteEvent]) {
     });
 }
 
-/// Voice a chord across `strings` strings: starting from the lowest note,
-/// stack chord tones upwards (repeating in higher octaves) until there are
-/// enough notes. With `strings == 0` the chord's notes are used as-is.
+/// Voice a chord across `strings` strings: the chord's notes are kept as
+/// they are (so extensions stay above the chord) and its triad tones (the
+/// lowest three notes) are doubled in higher octaves above them until
+/// there are enough notes, skipping any doubling that would sit a semitone
+/// from a note already there. With `strings == 0`, or a chord with at
+/// least that many notes, the chord's notes are used as-is.
 pub fn voice(chord: &[u8], strings: usize) -> Vec<u8> {
-    let mut notes: Vec<u8> = chord.to_vec();
-    notes.sort_unstable();
-    notes.dedup();
-    if strings == 0 || notes.is_empty() {
-        return notes;
+    let mut voicing: Vec<u8> = chord.to_vec();
+    voicing.sort_unstable();
+    voicing.dedup();
+    if strings == 0 || voicing.is_empty() {
+        return voicing;
     }
-    let classes: BTreeSet<u8> = notes.iter().map(|n| n % 12).collect();
-    let mut voicing = vec![];
-    let mut n = notes[0];
+    let classes: BTreeSet<u8> = voicing.iter().take(3).map(|n| n % 12).collect();
+    let mut n = *voicing.last().unwrap() + 1;
     while voicing.len() < strings && n <= 127 {
-        if classes.contains(&(n % 12)) {
+        let clashes = voicing.iter().any(|v| n.abs_diff(*v) == 1);
+        if classes.contains(&(n % 12)) && !clashes {
             voicing.push(n);
         }
         n += 1;
@@ -278,6 +281,12 @@ mod test {
         assert_eq!(voice(&C, 0), vec![60, 64, 67]);
         // Inversions keep their bass note
         assert_eq!(voice(&[64, 67, 72], 5), vec![64, 67, 72, 76, 79]);
+        // Extensions stay where they were composed; only triad tones are
+        // doubled above, never a semitone away from an existing note
+        assert_eq!(voice(&[69, 72, 76, 79, 83], 6), vec![69, 72, 76, 79, 83, 88]);
+        assert_eq!(voice(&[65, 69, 72, 76], 6), vec![65, 69, 72, 76, 81, 84]);
+        // Big chords are left alone
+        assert_eq!(voice(&[60, 64, 67, 71, 74, 77, 81], 6), vec![60, 64, 67, 71, 74, 77, 81]);
     }
 
     #[test]
