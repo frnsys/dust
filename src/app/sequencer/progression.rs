@@ -99,7 +99,7 @@ pub fn render<'a>(seq: &Sequencer) -> Paragraph<'a> {
 pub fn process_input(seq: &mut Sequencer, key: KeyEvent) -> Result<()> {
     let sel_idx = seq.selected_idx();
     let mut state = seq.state.lock().unwrap();
-    let sel_item = &state.progression.sequence[sel_idx];
+    let sel_item = state.progression.sequence.get(sel_idx).cloned().flatten();
     let selected_chord = if sel_item.is_some() {
         let chord_idx = state.progression.seq_idx_to_chord_idx(sel_idx);
         Some(chord_idx)
@@ -152,7 +152,7 @@ pub fn process_input(seq: &mut Sequencer, key: KeyEvent) -> Result<()> {
 pub fn controls<'a>(seq: &Sequencer) -> Vec<Span<'a>> {
     let sel_idx = seq.selected_idx();
     let state = seq.state.lock().unwrap();
-    let sel_item = &state.progression.sequence[sel_idx];
+    let sel_item = state.progression.sequence.get(sel_idx).cloned().flatten();
     if sel_item.is_some() {
         vec![
             Span::raw(" [U]p [D]own"),

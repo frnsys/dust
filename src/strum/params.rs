@@ -100,9 +100,9 @@ impl Default for StrumParams {
 }
 
 impl StrumParams {
-    /// Parameters that render every stroke exactly on the grid with no
-    /// randomness, for tests and for A/B comparisons.
-    pub fn quantized() -> Self {
+    /// These parameters with all randomness and feel removed, so every
+    /// stroke lands exactly on the grid: for tests and A/B comparisons.
+    pub fn quantize(&self) -> Self {
         StrumParams {
             spread_jitter: 0.0,
             string_jitter: 0.0,
@@ -110,7 +110,13 @@ impl StrumParams {
             up_late_ms: 0.0,
             swing: 0.0,
             velocity_jitter: 0.0,
-            ..Default::default()
+            ..self.clone()
         }
+    }
+
+    /// The default parameters, quantized.
+    #[cfg(test)]
+    pub fn quantized() -> Self {
+        StrumParams::default().quantize()
     }
 }

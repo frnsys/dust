@@ -16,6 +16,7 @@ use ratatui::{
     Terminal,
     backend::Backend,
     widgets::Paragraph,
+    style::{Style, Color},
     layout::{Rect, Alignment, Constraint, Direction, Layout},
     text::{Span, Line},
 };
@@ -42,6 +43,8 @@ pub struct App<'a> {
     sequencer: Sequencer<'a>,
     performance: Performance<'a>,
     select: Option<Select>,
+    /// Last status message, e.g. a port connection error.
+    message: String,
 }
 
 impl<'a> App<'a> {
@@ -61,6 +64,7 @@ impl<'a> App<'a> {
         App {
             midi: midi.clone(),
             select: None,
+            message: String::new(),
             mode: Mode::Performance,
             sequencer: seq,
             performance: Performance::new(midi.clone(), template, strum_library, save_dir),
@@ -121,6 +125,11 @@ where
             }
             controls.push(
                 Span::raw(" [M]ode [P]ort [Q]uit"));
+            if !app.message.is_empty() {
+                controls.push(Span::styled(
+                    format!("  {}", app.message),
+                    Style::default().fg(Color::Red)));
+            }
             let controls_help = Paragraph::new(Line::from(controls))
                 .alignment(Alignment::Left);
             frame.render_widget(controls_help, rects[2]);
@@ -175,7 +184,10 @@ where
                         Some(select) => {
                             let (selected, close) = select.process_input(key)?;
                             if let Some(idx) = selected {
-                                app.midi.lock().unwrap().connect_port(idx).unwrap();
+                                app.message = match app.midi.lock().unwrap().connect_port(idx) {
+                                    Ok(_) => String::new(),
+                                    Err(e) => format!("Couldn't connect to port: {}", e),
+                                };
                             }
                             if close {
                                 app.select = None;
@@ -203,8 +215,10 @@ where
 
                                 // Change the MIDI output port
                                 KeyCode::Char('P') => {
-                                    let ports = app.midi.lock().unwrap().available_ports().unwrap();
-                                    app.select = Some(Select::new(ports));
+                                    match app.midi.lock().unwrap().available_ports() {
+                                        Ok(ports) => app.select = Some(Select::new(ports)),
+                                        Err(e) => app.message = format!("Couldn't list ports: {}", e),
+                                    }
                                 }
                                 _ => {
                                     match app.mode {

@@ -82,8 +82,8 @@ pub fn render<'a>(seq: &Sequencer) -> Paragraph<'a> {
 pub fn process_input(seq: &mut Sequencer, key: KeyEvent) -> Result<()> {
     let sel_idx = seq.selected_idx();
     let mut state = seq.state.lock().unwrap();
-    let sel_item = &state.progression.sequence[sel_idx];
-    let bars = state.progression.bars();
+    let sel_item = state.progression.sequence.get(sel_idx).cloned().flatten();
+    let bars = state.progression.bars().max(1);
     let ticks_per_bar = state.progression.resolution.ticks_per_bar();
 
     match key.code {
@@ -143,7 +143,7 @@ pub fn process_input(seq: &mut Sequencer, key: KeyEvent) -> Result<()> {
 
         // Edit or add chord at cursor
         KeyCode::Char('e') => {
-            let select = if let Some(cs) = sel_item {
+            let select = if let Some(cs) = &sel_item {
                 ChordSelect::with_chord(cs)
             } else {
                 ChordSelect::default()
@@ -156,18 +156,14 @@ pub fn process_input(seq: &mut Sequencer, key: KeyEvent) -> Result<()> {
 
         // Delete chord under cursor
         KeyCode::Char('d') => {
-            match sel_item {
-                None => {},
-                Some(_) => {
-                    state.progression.delete_chord_at(sel_idx);
-                }
+            if sel_item.is_some() {
+                state.progression.delete_chord_at(sel_idx);
             }
         }
 
-        // Select a progression chord by number
+        // Select a progression chord by number (1-9)
         KeyCode::Char(c) => {
-            if c.is_numeric() {
-                let idx = c.to_string().parse::<usize>()? - 1;
+            if let Some(idx) = c.to_digit(10).filter(|d| *d > 0).map(|d| d as usize - 1) {
                 if let Some(_) = state.progression.chord(idx) {
                     let seq_idx = state.progression.chord_index[idx];
 
@@ -187,7 +183,7 @@ pub fn process_input(seq: &mut Sequencer, key: KeyEvent) -> Result<()> {
 pub fn controls<'a>(seq: &Sequencer) -> Vec<Span<'a>> {
     let sel_idx = seq.selected_idx();
     let state = seq.state.lock().unwrap();
-    let sel_item = &state.progression.sequence[sel_idx];
+    let sel_item = state.progression.sequence.get(sel_idx).cloned().flatten();
 
     let mut controls = vec![
         Span::raw(" [e]dit"),

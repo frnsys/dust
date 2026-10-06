@@ -21,7 +21,7 @@ use ratatui::{
 };
 use core::{Key, Mode, ChordSpec};
 use progression::ProgressionTemplate;
-use strum::{StrumLibrary, StrumParams, override_params, render_strummed, render_block};
+use strum::{StrumLibrary, NoteEvent, override_params, render_strummed, render_block};
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
@@ -110,6 +110,11 @@ struct RenderArgs {
     /// e.g. 24 for nylon guitar, 25 for steel guitar
     #[arg(long)]
     program: Option<u8>,
+
+    /// Silence before the first beat, so the first strum isn't cut off
+    /// when it starts slightly ahead of the beat
+    #[arg(long, default_value_t = 0.0)]
+    lead_in_ms: f64,
 }
 
 fn config_path(name: &str) -> PathBuf {
@@ -167,12 +172,10 @@ fn render(args: RenderArgs, library: StrumLibrary) -> Result<()> {
 
     let events = match strum {
         Some((pattern, params)) => {
-            let mut params = if args.quantized {
-                StrumParams { ..StrumParams::quantized() }
-            } else {
-                params
-            };
-            params = override_params(&params, &args.overrides)?;
+            let mut params = override_params(&params, &args.overrides)?;
+            if args.quantized {
+                params = params.quantize();
+            }
             let seed = args.seed.unwrap_or_else(rand::random);
             eprintln!("seed: {}", seed);
             render_strummed(&steps, args.steps_per_beat, &pattern, &params, args.bpm, args.repeats, seed)
@@ -182,6 +185,9 @@ fn render(args: RenderArgs, library: StrumLibrary) -> Result<()> {
             render_block(&steps, args.steps_per_beat, args.bpm, step_ms, 100, args.repeats)
         }
     };
+    let events: Vec<NoteEvent> = events.into_iter()
+        .map(|e| NoteEvent { at_ms: e.at_ms + args.lead_in_ms, ..e })
+        .collect();
     file::save_to_midi_file_with_program(args.bpm, &events, args.program, args.out.to_string_lossy().to_string())?;
     eprintln!("wrote {} ({} note events)", args.out.display(), events.len());
     Ok(())

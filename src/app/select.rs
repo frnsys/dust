@@ -47,6 +47,9 @@ impl Select {
     /// and if the widget should be closed.
     pub fn process_input(&mut self, key: KeyEvent) -> Result<(Option<usize>, bool)> {
         let n_choices = self.choices.len();
+        if n_choices == 0 {
+            return Ok((None, matches!(key.code, KeyCode::Enter | KeyCode::Esc)));
+        }
         match key.code {
             KeyCode::Char('j') => {
                 if self.idx < self.choices.len() - 1 {

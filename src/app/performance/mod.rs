@@ -62,6 +62,11 @@ pub struct Performance<'a> {
     strummer: Strummer,
 }
 
+/// The mapping slot (0-8) for a number key 1-9.
+fn slot_index(c: char) -> Option<usize> {
+    c.to_digit(10).filter(|d| (1..=9).contains(d)).map(|d| d as usize - 1)
+}
+
 /// A single down stroke of `chord`, held for `hold_ms`.
 fn strum_once(strummer: &mut Strummer, chord: &Chord, hold_ms: f64) -> Vec<NoteEvent> {
     strummer.reset();
@@ -217,7 +222,10 @@ impl<'a> Performance<'a> {
                                 };
                             }
                             TextTarget::Duration => {
-                                self.note_duration = input.parse::<u64>()?;
+                                match input.parse::<u64>() {
+                                    Ok(d) => self.note_duration = d,
+                                    Err(_) => self.message = "Invalid duration",
+                                }
                             }
                             TextTarget::Progression => {
                                 let mappings: Result<Vec<ChordSpec>, ChordParseError> = input.split_whitespace()
@@ -270,17 +278,12 @@ impl<'a> Performance<'a> {
                             self.input_mode = InputMode::Normal;
                         }
 
-                        match key.code {
-                            KeyCode::Char(c) => {
-                                if c.is_numeric() {
-                                    let idx = c.to_string().parse::<usize>()? - 1;
-                                    if let Some(cs) = &self.mappings[idx] {
-                                        let chord = cs.chord_for_key(&self.key);
-                                        self.play_chord(&chord);
-                                    }
-                                }
-                            }
-                            _ => {}
+                        if let KeyCode::Char(c) = key.code
+                            && let Some(idx) = slot_index(c)
+                            && let Some(cs) = &self.mappings[idx]
+                        {
+                            let chord = cs.chord_for_key(&self.key);
+                            self.play_chord(&chord);
                         }
                     }
                     Err(_) => {
@@ -297,17 +300,13 @@ impl<'a> Performance<'a> {
                         code: KeyCode::Char(c),
                         ..
                     } => {
-                        if c.is_numeric() {
-                            let idx = c.to_string().parse::<usize>()?;
-                            if idx > 0 {
-                                let select = if let Some(cs) = &self.mappings[idx-1] {
-                                    ChordSelect::with_chord(cs)
-                                } else {
-                                    ChordSelect::default()
-                                };
-                                self.input_mode = InputMode::Chord(
-                                    select, idx-1);
-                            }
+                        if let Some(idx) = slot_index(c) {
+                            let select = if let Some(cs) = &self.mappings[idx] {
+                                ChordSelect::with_chord(cs)
+                            } else {
+                                ChordSelect::default()
+                            };
+                            self.input_mode = InputMode::Chord(select, idx);
                         }
 
                     }
@@ -383,12 +382,11 @@ impl<'a> Performance<'a> {
 
                     // Play the chord bound to that number
                     KeyCode::Char(c) => {
-                        if c.is_numeric() {
-                            let idx = c.to_string().parse::<usize>()? - 1;
-                            if let Some(cs) = &self.mappings[idx] {
-                                let chord = cs.chord_for_key(&self.key);
-                                self.play_chord(&chord);
-                            }
+                        if let Some(idx) = slot_index(c)
+                            && let Some(cs) = &self.mappings[idx]
+                        {
+                            let chord = cs.chord_for_key(&self.key);
+                            self.play_chord(&chord);
                         }
                     }
 

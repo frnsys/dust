@@ -14,6 +14,10 @@ const DEFAULT_BPM: f64 = 120.0;
 /// Smoothing factor for the tick interval estimate.
 const TEMPO_SMOOTHING: f64 = 0.1;
 
+/// Consecutive implausibly long pulse intervals before the estimate
+/// is reset to them (so a large tempo drop isn't rejected forever).
+const MAX_REJECTED_INTERVALS: usize = 3;
+
 #[derive(Debug, PartialEq)]
 pub enum ClockEvent {
     /// A clock pulse. `tick` counts from 0 at the downbeat of each bar
@@ -55,14 +59,24 @@ impl MIDIClock {
         let mut playing = false;
         let mut last_stamp: Option<u64> = None;
         let mut ms_per_tick = 60_000.0 / DEFAULT_BPM / TICKS_PER_QUARTER as f64;
+        let mut rejected = 0;
         move |stamp_us, msg, _| {
             let ev = match msg {
                 [248] => {
                     if let Some(last) = last_stamp {
                         let interval = (stamp_us.saturating_sub(last)) as f64 / 1000.0;
-                        // Ignore the gap across a stop/start or a stall
                         if interval > 0.0 && interval < ms_per_tick * 4.0 {
                             ms_per_tick += TEMPO_SMOOTHING * (interval - ms_per_tick);
+                            rejected = 0;
+                        } else if interval > 0.0 {
+                            // A single long gap is a stall (e.g. across a
+                            // stop/start); several in a row mean the tempo
+                            // really dropped a lot, so re-sync to it.
+                            rejected += 1;
+                            if rejected >= MAX_REJECTED_INTERVALS {
+                                ms_per_tick = interval;
+                                rejected = 0;
+                            }
                         }
                     }
                     last_stamp = Some(stamp_us);

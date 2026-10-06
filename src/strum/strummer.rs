@@ -166,8 +166,9 @@ impl Strummer {
                 let spread = (p.spread_ms * 0.5).min(p.max_spread_fraction * gap_beats * beat_ms);
                 let strings: Vec<usize> = (0..n).collect();
                 let (ons, _) = self.strike(&strings, t0, spread, velocity, &p);
+                let mute_ms = p.mute_ms.min(p.max_spread_fraction * gap_beats * beat_ms);
                 for on in ons {
-                    events.push(NoteEvent::off(on.at_ms + p.mute_ms, on.note));
+                    events.push(NoteEvent::off(on.at_ms + mute_ms, on.note));
                     events.push(on);
                 }
             }
@@ -403,6 +404,13 @@ mod test {
         let events = s.stroke(&mute, Some(&C), BEAT, BEAT, 1.0);
         assert!(ons(&events).is_empty());
         assert_eq!(offs(&events).len(), 6);
+
+        // A mute hit is shortened when the next stroke comes quickly
+        let mut s = Strummer::new(StrumParams::quantized(), 1);
+        let events = s.stroke(&mute, Some(&C), 0.0, 200.0, 0.1);
+        let hit = ons(&events)[0];
+        let end = offs(&events).into_iter().filter(|e| e.note == hit.note).last().unwrap();
+        assert!(end.at_ms - hit.at_ms <= 0.6 * 20.0 + 1e-9);
     }
 
     #[test]

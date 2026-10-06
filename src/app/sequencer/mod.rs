@@ -126,6 +126,14 @@ impl<'a> Sequencer<'a> {
         i * self.ticks_per_bar + j
     }
 
+    /// Keep the cursor inside the grid after the bar count or resolution changes.
+    fn clamp_cursor(&mut self) {
+        let s = self.state.lock().unwrap();
+        let bars = s.progression.bars().max(1);
+        self.grid_pos.0 = self.grid_pos.0.min(self.ticks_per_bar - 1);
+        self.grid_pos.1 = self.grid_pos.1.min(bars - 1);
+    }
+
     pub fn capture_input(&self) -> bool {
         match self.input_mode {
             InputMode::Normal => false,
@@ -205,6 +213,7 @@ impl<'a> Sequencer<'a> {
                                     s.gen_progression(&self.template)?;
                                 }
                                 self.ticks_per_bar = res.ticks_per_bar();
+                                self.clamp_cursor();
                             }
                             SelectTarget::Strum => {
                                 let mut s = self.state.lock().unwrap();
@@ -220,6 +229,7 @@ impl<'a> Sequencer<'a> {
             InputMode::Text(text_input, target) => {
                 let (input, close) = text_input.process_input(key)?;
                 if close {
+                    let mut clamp = false;
                     if let Some(input) = input {
                         let mut s = self.state.lock().unwrap();
                         match target {
@@ -235,11 +245,20 @@ impl<'a> Sequencer<'a> {
                                 };
                             }
                             TextTarget::Duration => {
-                                s.note_duration = input.parse::<u64>()?;
+                                match input.parse::<u64>() {
+                                    Ok(d) => s.note_duration = d,
+                                    Err(_) => self.message = "Invalid duration",
+                                }
                             }
                             TextTarget::Bars => {
-                                s.bars = input.parse::<usize>()?;
-                                s.gen_progression(&self.template)?;
+                                match input.parse::<usize>() {
+                                    Ok(bars) if bars > 0 => {
+                                        s.bars = bars;
+                                        s.gen_progression(&self.template)?;
+                                        clamp = true;
+                                    }
+                                    _ => self.message = "Invalid number of bars",
+                                }
                             }
                             TextTarget::Export => {
                                 let steps: Vec<Option<Vec<u8>>> = s.progression.in_key(&s.key)
@@ -265,6 +284,9 @@ impl<'a> Sequencer<'a> {
                                 }
                             }
                         }
+                    }
+                    if clamp {
+                        self.clamp_cursor();
                     }
                     self.input_mode = InputMode::Normal;
                 }
