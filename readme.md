@@ -4,11 +4,9 @@ A chord composing tool. `dust` doesn't output any audio itself but instead drive
 
 ## Setup
 
-### Chord patterns
+### Chord and strum patterns
 
-By default `dust` looks for a yaml file with chord patterns at `~/.config/dust/patterns.yaml`.
-
-See below for more on chord progression patterns.
+The chord progression patterns (`patterns.yaml`) and strum patterns (`strums.yaml`) are compiled into the binary, so edit them in the repository and rebuild. See below for more on both formats.
 
 ### MIDI
 
@@ -46,7 +44,7 @@ Both modes can play chords as strums instead of block chords. Press `t` to pick 
 
 Strums are humanized: each stroke is spread across the chord's notes like strings (low to high on a down stroke, high to low and only the top strings on an up stroke), with small random timing and velocity variations, softer up strokes, accents, optional swing, and so on. The chord is voiced across 6 "strings" by default, stacking chord tones upward from the bass note.
 
-Strum patterns live in `~/.config/dust/strums.yaml` (or pass `--strums <file>`); if there is no such file the built-in library in `strums.yaml` is used. A pattern is a whitespace-separated list of beats, and the characters within a beat subdivide it evenly:
+Strum patterns live in `strums.yaml`. A pattern is a whitespace-separated list of beats, and the characters within a beat subdivide it evenly:
 
 ```yaml
 defaults:        # parameters applied to every pattern

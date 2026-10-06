@@ -6,8 +6,8 @@ mod progression;
 mod strum;
 
 use clap::{Parser, Subcommand, ValueHint};
-use std::{fs::File, path::{Path, PathBuf}, env};
-use std::{io, io::BufReader};
+use std::io;
+use std::path::PathBuf;
 use app::{App, run_app};
 use anyhow::{Result, Context, bail};
 use ratatui::crossterm::{
@@ -28,14 +28,6 @@ use strum::{StrumLibrary, NoteEvent, override_params, render_strummed, render_bl
 struct Args {
     #[command(subcommand)]
     command: Option<Command>,
-
-    /// Chord progression patterns file (default: ~/.config/dust/patterns.yaml)
-    #[arg(short, long, value_hint = ValueHint::FilePath)]
-    patterns: Option<PathBuf>,
-
-    /// Strum patterns file (default: ~/.config/dust/strums.yaml, else the built-in library)
-    #[arg(long, value_hint = ValueHint::FilePath)]
-    strums: Option<PathBuf>,
 
     #[arg(short, long, default_value = "/tmp/", value_hint = ValueHint::DirPath)]
     save_dir: String,
@@ -117,29 +109,14 @@ struct RenderArgs {
     lead_in_ms: f64,
 }
 
-fn config_path(name: &str) -> PathBuf {
-    let home = env::var("HOME").unwrap_or_default();
-    Path::new(&home).join(".config/dust").join(name)
-}
+/// The chord progression patterns, compiled into the binary.
+const PATTERNS: &str = include_str!("../patterns.yaml");
 
-fn load_patterns(path: Option<PathBuf>) -> Result<ProgressionTemplate> {
-    let path = path.unwrap_or_else(|| config_path("patterns.yaml"));
-    let file = File::open(&path).with_context(|| format!("could not open {}", path.display()))?;
-    let reader = BufReader::new(file);
-    let mut template: ProgressionTemplate = serde_yaml::from_reader(reader)
-        .with_context(|| format!("error while reading {}", path.display()))?;
+fn load_patterns() -> Result<ProgressionTemplate> {
+    let mut template: ProgressionTemplate = serde_yaml::from_str(PATTERNS)
+        .context("error while reading patterns.yaml")?;
     template.update_transitions();
     Ok(template)
-}
-
-fn load_strums(path: Option<PathBuf>) -> Result<StrumLibrary> {
-    let path = path.unwrap_or_else(|| config_path("strums.yaml"));
-    if path.exists() {
-        let yaml = std::fs::read_to_string(&path)?;
-        StrumLibrary::from_yaml(&yaml).with_context(|| format!("error while reading {}", path.display()))
-    } else {
-        Ok(StrumLibrary::default_library())
-    }
 }
 
 fn render(args: RenderArgs, library: StrumLibrary) -> Result<()> {
@@ -195,13 +172,13 @@ fn render(args: RenderArgs, library: StrumLibrary) -> Result<()> {
 
 fn main() -> Result<()> {
     let args = Args::parse();
-    let strum_library = load_strums(args.strums)?;
+    let strum_library = StrumLibrary::default_library();
 
     if let Some(Command::Render(render_args)) = args.command {
         return render(render_args, strum_library);
     }
 
-    let template = load_patterns(args.patterns)?;
+    let template = load_patterns()?;
 
     enable_raw_mode()?;
 
@@ -232,4 +209,16 @@ fn main() -> Result<()> {
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_builtin_patterns_load() {
+        let template = load_patterns().unwrap();
+        let prog = template.gen_progression(&Mode::Major, 2, &core::Duration::Eighth);
+        assert_eq!(prog.sequence.len(), 16);
+    }
 }

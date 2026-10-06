@@ -13,8 +13,7 @@ use anyhow::{Result, Context, bail};
 use serde::Deserialize;
 use serde_yaml::Value;
 
-/// The strum pattern library that ships with the binary,
-/// used when no user library is found.
+/// The strum pattern library, compiled into the binary.
 pub const DEFAULT_LIBRARY: &str = include_str!("../../strums.yaml");
 
 /// A named strum pattern with its fully resolved parameters.
