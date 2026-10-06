@@ -1,11 +1,11 @@
 use anyhow::Result;
-use tui::{
+use ratatui::{
     layout::Alignment,
     style::{Style, Color},
-    text::{Span, Spans},
+    text::{Span, Line},
     widgets::{Block, Paragraph, Borders},
 };
-use crossterm::event::{KeyEvent, KeyCode};
+use ratatui::crossterm::event::{KeyEvent, KeyCode};
 
 pub struct Select {
     pub idx: usize,
@@ -32,7 +32,7 @@ impl Select {
             } else {
                 Span::raw(choice)
             };
-            let row = Spans::from(span);
+            let row = Line::from(span);
             rows.push(row);
         }
         Paragraph::new(rows)

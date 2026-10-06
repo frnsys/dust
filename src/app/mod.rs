@@ -11,17 +11,17 @@ use std::{
 };
 use crate::midi::MIDIOutput;
 use crate::progression::ProgressionTemplate;
-use tui::{
+use ratatui::{
     Terminal,
     backend::Backend,
     widgets::Paragraph,
     layout::{Rect, Alignment, Constraint, Direction, Layout},
-    text::{Span, Spans},
+    text::{Span, Line},
 };
 use select::Select;
 use sequencer::Sequencer;
 use performance::Performance;
-use crossterm::event::{self, Event, KeyCode};
+use ratatui::crossterm::event::{self, Event, KeyCode, KeyEventKind};
 
 const TICK_RATE: Duration = Duration::from_millis(100);
 
@@ -58,10 +58,14 @@ impl<'a> App<'a> {
     }
 }
 
-pub fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> Result<()> {
+pub fn run_app<B>(terminal: &mut Terminal<B>, mut app: App) -> Result<()>
+where
+    B: Backend,
+    B::Error: Send + Sync + 'static,
+{
     loop {
         terminal.draw(|frame| {
-            let size = frame.size();
+            let size = frame.area();
             let rects = Layout::default()
                 .direction(Direction::Vertical)
                 .constraints([
@@ -87,7 +91,7 @@ pub fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> Result<(
                 }
             }
 
-            let params_help = Paragraph::new(Spans::from(params))
+            let params_help = Paragraph::new(Line::from(params))
                 .alignment(Alignment::Center);
             frame.render_widget(params_help, rects[0]);
 
@@ -103,7 +107,7 @@ pub fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> Result<(
             }
             controls.push(
                 Span::raw(" [M]ode [P]ort [Q]uit"));
-            let controls_help = Paragraph::new(Spans::from(controls))
+            let controls_help = Paragraph::new(Line::from(controls))
                 .alignment(Alignment::Left);
             frame.render_widget(controls_help, rects[2]);
 
@@ -129,7 +133,9 @@ pub fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> Result<(
         })?;
 
         if event::poll(TICK_RATE)? {
-            if let Event::Key(key) = event::read()? {
+            if let Event::Key(key) = event::read()?
+                && key.kind == KeyEventKind::Press
+            {
                 // Check if one of the modes is capturing all input
                 let input_mode = match app.mode {
                     Mode::Performance => {
@@ -152,7 +158,7 @@ pub fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> Result<(
                 } else {
                     match &mut app.select {
                         // Midi port selection
-                        Some(ref mut select) => {
+                        Some(select) => {
                             let (selected, close) = select.process_input(key)?;
                             if let Some(idx) = selected {
                                 app.midi.lock().unwrap().connect_port(idx).unwrap();

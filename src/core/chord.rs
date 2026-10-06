@@ -5,15 +5,14 @@ use super::note::Note;
 use super::key::{Key, Mode};
 use super::interval::Interval;
 use super::degree::{Degree, DegreeParseError};
-use lazy_static::lazy_static;
+use std::sync::LazyLock;
 
 pub const NUMERALS: [&str; 7] = ["I", "II", "III", "IV", "V", "VI", "VII"];
 
-lazy_static! {
-    static ref CHORD_RE: Regex = Regex::new(
-        r"^([b#])*([IV]+|[iv]+)([+-^_5])?(:([b#]?\d+,?)*)?(/([b#]?\d+)|(%([b#]?\d+)))?(>\d+)?(<\d+)?(~([b#])*([IV]+|[iv]+))?$")
-        .unwrap();
-}
+static CHORD_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"^([b#])*([IV]+|[iv]+)([+-^_5])?(:([b#]?\d+,?)*)?(/([b#]?\d+)|(%([b#]?\d+)))?(>\d+)?(<\d+)?(~([b#])*([IV]+|[iv]+))?$")
+        .unwrap()
+});
 
 fn numeral_to_index(numeral: &str) -> Option<usize> {
     NUMERALS.iter().position(|&n| n == numeral.to_uppercase())

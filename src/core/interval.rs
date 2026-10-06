@@ -2,7 +2,7 @@ use thiserror::Error;
 use super::key::Mode;
 use super::degree::Degree;
 use std::{fmt, str::FromStr};
-use lazy_static::lazy_static;
+use std::sync::LazyLock;
 
 const NAMES: [&str; 12] = [
     "P1",
@@ -19,20 +19,18 @@ const NAMES: [&str; 12] = [
     "M7",
 ];
 
-lazy_static! {
-    pub static ref MAJ_DEGS: Vec<Degree> = {
-        let ds: [&str; 12] = [
-            "1", "b2", "2", "b3", "3", "4",
-            "b5", "5", "b6", "6", "b7", "7"];
-        ds.iter().map(|d| (*d).try_into().unwrap()).collect()
-    };
-    pub static ref MIN_DEGS: Vec<Degree> = {
-        let ds: [&str; 12] = [
-            "1", "2", "b3", "3", "b4", "4",
-            "b5", "5", "6", "b7", "7", "#7"];
-        ds.iter().map(|d| (*d).try_into().unwrap()).collect()
-    };
-}
+pub static MAJ_DEGS: LazyLock<Vec<Degree>> = LazyLock::new(|| {
+    let ds: [&str; 12] = [
+        "1", "b2", "2", "b3", "3", "4",
+        "b5", "5", "b6", "6", "b7", "7"];
+    ds.iter().map(|d| (*d).try_into().unwrap()).collect()
+});
+pub static MIN_DEGS: LazyLock<Vec<Degree>> = LazyLock::new(|| {
+    let ds: [&str; 12] = [
+        "1", "2", "b3", "3", "b4", "4",
+        "b5", "5", "6", "b7", "7", "#7"];
+    ds.iter().map(|d| (*d).try_into().unwrap()).collect()
+});
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub struct Interval {

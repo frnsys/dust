@@ -2,11 +2,9 @@ use regex::Regex;
 use thiserror::Error;
 use std::{fmt, str::FromStr};
 use super::key::{Mode, MAJOR, MINOR};
-use lazy_static::lazy_static;
+use std::sync::LazyLock;
 
-lazy_static! {
-    static ref EXT_RE: Regex = Regex::new(r"^([b#]*)(\d+)$").unwrap();
-}
+static EXT_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^([b#]*)(\d+)$").unwrap());
 
 #[derive(Error, Debug)]
 pub enum DegreeParseError {

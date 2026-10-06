@@ -11,13 +11,13 @@ use crate::app::chord_select::ChordSelect;
 use crate::app::select::Select;
 use crate::progression::ProgressionTemplate;
 use crate::midi::{MIDIOutput, MIDIClock, MIDIError, ClockEvent};
-use tui::{
+use ratatui::{
     text::Span,
     widgets::Paragraph,
     style::{Style, Modifier, Color},
     layout::{Rect, Alignment, Constraint, Direction, Layout},
 };
-use crossterm::event::{KeyEvent, KeyCode};
+use ratatui::crossterm::event::{KeyEvent, KeyCode};
 use state::PlaybackState;
 
 enum InputMode<'a> {
@@ -177,7 +177,7 @@ impl<'a> Sequencer<'a> {
 
     pub fn process_input(&mut self, key: KeyEvent) -> Result<()> {
         match &mut self.input_mode {
-            InputMode::Select(ref mut select, target) => {
+            InputMode::Select(select, target) => {
                 let (selection, close) = select.process_input(key)?;
                 if close {
                     if let Some(selected) = selection {
@@ -202,7 +202,7 @@ impl<'a> Sequencer<'a> {
                     self.input_mode = InputMode::Normal;
                 }
             },
-            InputMode::Text(ref mut text_input, target) => {
+            InputMode::Text(text_input, target) => {
                 let (input, close) = text_input.process_input(key)?;
                 if close {
                     if let Some(input) = input {
@@ -246,7 +246,7 @@ impl<'a> Sequencer<'a> {
                     self.input_mode = InputMode::Normal;
                 }
             }
-            InputMode::Chord(ref mut chord_select, target) => {
+            InputMode::Chord(chord_select, target) => {
                 match chord_select.process_input(key) {
                     Ok((sel, close)) => {
                         if close {

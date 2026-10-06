@@ -1,11 +1,11 @@
 use anyhow::Result;
-use tui::{
+use ratatui::{
     layout::Alignment,
     style::{Style, Color},
-    text::{Span, Spans},
+    text::{Span, Line},
     widgets::{Block, Paragraph, Borders},
 };
-use crossterm::event::{KeyEvent, KeyCode};
+use ratatui::crossterm::event::{KeyEvent, KeyCode};
 use super::{Sequencer, InputMode, ChordSelect, ChordTarget};
 
 pub fn render<'a>(seq: &Sequencer) -> Paragraph<'a> {
@@ -66,7 +66,7 @@ pub fn render<'a>(seq: &Sequencer) -> Paragraph<'a> {
             bars.push(span);
         }
         bars.push(Span::raw("|"));
-        lines.push(Spans::from(bars));
+        lines.push(Line::from(bars));
     }
 
     Paragraph::new(lines)

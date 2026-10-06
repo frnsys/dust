@@ -1,12 +1,12 @@
 use anyhow::Result;
-use tui::{
+use ratatui::{
     layout::Alignment,
     style::{Style, Color, Modifier},
-    text::{Span, Spans},
+    text::{Span, Line},
     widgets::{Block, Paragraph, Borders},
 };
 use super::Sequencer;
-use crossterm::event::{KeyEvent, KeyCode};
+use ratatui::crossterm::event::{KeyEvent, KeyCode};
 
 pub fn render<'a>(seq: &Sequencer) -> Paragraph<'a> {
     let sel_idx = seq.selected_idx();
@@ -45,7 +45,7 @@ pub fn render<'a>(seq: &Sequencer) -> Paragraph<'a> {
         };
         Span::styled(name, style)
     }).collect();
-    lines.push(Spans::from(chord_id_spans));
+    lines.push(Line::from(chord_id_spans));
 
     // The spans for the chord
     let chord_name_spans: Vec<Span> = progression.iter().enumerate().map(|(i, cs)| {
@@ -67,7 +67,7 @@ pub fn render<'a>(seq: &Sequencer) -> Paragraph<'a> {
         };
         Span::styled(name, style)
     }).collect();
-    lines.push(Spans::from(chord_name_spans));
+    lines.push(Line::from(chord_name_spans));
 
     for i in 0..required_lines {
         let mut cur_len = 0;
@@ -83,7 +83,7 @@ pub fn render<'a>(seq: &Sequencer) -> Paragraph<'a> {
                 None
             }
         }).collect();
-        lines.push(Spans::from(chord_note_spans));
+        lines.push(Line::from(chord_note_spans));
     }
 
     Paragraph::new(lines)

@@ -1,11 +1,11 @@
 use anyhow::Result;
-use tui::{
+use ratatui::{
     layout::Alignment,
     style::{Style, Color},
-    text::{Span, Spans},
+    text::{Span, Line},
     widgets::{Block, Paragraph},
 };
-use crossterm::event::{KeyEvent, KeyCode};
+use ratatui::crossterm::event::{KeyEvent, KeyCode};
 
 pub struct TextInput<'a> {
     pub input: String,
@@ -27,7 +27,7 @@ impl<'a> TextInput<'a> {
     }
 
     pub fn render<'b>(&self) -> Paragraph<'b> {
-        let spans = Spans::from(vec![
+        let spans = Line::from(vec![
             Span::raw(self.label.to_string()),
             Span::styled(self.input.clone(),
                 Style::default().fg(Color::LightBlue))

@@ -4,35 +4,36 @@ mod file;
 mod midi;
 mod progression;
 
-use clap::{Parser, ValueHint};
-use std::{fs::File, path::{Path, PathBuf}, env};
-use std::{io, io::BufReader};
-use app::{App, run_app};
 use anyhow::Result;
-use crossterm::{
-    execute,
-    event::{DisableMouseCapture, EnableMouseCapture},
-    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
-};
-use tui::{
-    Terminal,
-    backend::CrosstermBackend,
-};
+use app::{App, run_app};
+use clap::{Parser, ValueHint};
 use progression::ProgressionTemplate;
+use ratatui::crossterm::{
+    event::{DisableMouseCapture, EnableMouseCapture},
+    execute,
+    terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
+};
+use ratatui::{Terminal, backend::CrosstermBackend};
+use std::{
+    env,
+    fs::File,
+    path::{Path, PathBuf},
+};
+use std::{io, io::BufReader};
 
 #[derive(Parser, Debug)]
-#[clap(author, version, about, long_about = None)]
+#[command(author, version, about, long_about = None)]
 struct Args {
-    #[clap(short, long, value_hint = ValueHint::FilePath)]
+    #[arg(short, long, value_hint = ValueHint::FilePath)]
     patterns: Option<PathBuf>,
 
-    #[clap(short, long, default_value = "/tmp/", value_hint = ValueHint::DirPath)]
+    #[arg(short, long, default_value = "/tmp/", value_hint = ValueHint::DirPath)]
     save_dir: String,
 
-    #[clap(long, default_value = "1")]
+    #[arg(long, default_value = "1")]
     midi_in_port: usize,
 
-    #[clap(long, default_value = "1")]
+    #[arg(long, default_value = "1")]
     midi_out_port: usize,
 }
 
@@ -47,7 +48,8 @@ fn main() -> Result<()> {
     };
     let file = File::open(path).expect("could not open file");
     let reader = BufReader::new(file);
-    let mut template: ProgressionTemplate = serde_yaml::from_reader(reader).expect("error while reading yaml");
+    let mut template: ProgressionTemplate =
+        serde_yaml::from_reader(reader).expect("error while reading yaml");
     template.update_transitions();
 
     enable_raw_mode()?;
@@ -57,7 +59,12 @@ fn main() -> Result<()> {
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
 
-    let app = App::new(template, args.midi_in_port, args.midi_out_port, args.save_dir);
+    let app = App::new(
+        template,
+        args.midi_in_port,
+        args.midi_out_port,
+        args.save_dir,
+    );
     let res = run_app(&mut terminal, app);
 
     disable_raw_mode()?;

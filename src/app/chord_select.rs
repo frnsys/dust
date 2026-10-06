@@ -1,9 +1,9 @@
 use anyhow::Result;
 use super::select::Select;
 use super::text_input::TextInput;
-use tui::widgets::Paragraph;
+use ratatui::widgets::Paragraph;
 use crate::core::{ChordSpec, NUMERALS};
-use crossterm::event::{KeyEvent, KeyCode};
+use ratatui::crossterm::event::{KeyEvent, KeyCode};
 
 const MAJ_CHORD_TYPES: [&str; 16] = [
     "", ":6", ":6,9", ":7", ":7,9",

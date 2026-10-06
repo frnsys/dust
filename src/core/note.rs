@@ -3,15 +3,13 @@ use thiserror::Error;
 use std::{fmt, str::FromStr};
 use std::ops::{Add, Sub};
 use super::interval::Interval;
-use lazy_static::lazy_static;
+use std::sync::LazyLock;
 
 const NAMES: [&str; 12] = ["A", "Bb", "B", "C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab"];
 
-lazy_static! {
-    static ref NOTE_RE: Regex = Regex::new(
-        r"^([A-G][b#]?)(\d)$")
-        .unwrap();
-}
+static NOTE_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"^([A-G][b#]?)(\d)$").unwrap()
+});
 
 /// 0 semitones = "A0".
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]

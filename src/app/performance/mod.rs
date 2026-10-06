@@ -6,9 +6,9 @@ use crate::app::text_input::TextInput;
 use crate::app::chord_select::ChordSelect;
 use crate::progression::ProgressionTemplate;
 use crate::core::{Key, Mode, Duration, ChordSpec, ChordParseError, voice_lead};
-use crossterm::event::{KeyEvent, KeyCode, KeyModifiers};
-use tui::{
-    text::{Span, Spans},
+use ratatui::crossterm::event::{KeyEvent, KeyCode, KeyModifiers};
+use ratatui::{
+    text::{Span, Line},
     style::{Style, Modifier, Color},
     widgets::{Block, Paragraph, Borders},
     layout::{Rect, Alignment, Constraint, Direction, Layout},
@@ -116,7 +116,7 @@ impl<'a> Performance<'a> {
     pub fn process_input(&mut self, key: KeyEvent) -> Result<()> {
         let mut midi = self.midi.lock().unwrap();
         match &mut self.input_mode {
-            InputMode::Text(ref mut text_input, target) => {
+            InputMode::Text(text_input, target) => {
                 let (input, close) = text_input.process_input(key)?;
                 if close {
                     if let Some(input) = input {
@@ -172,7 +172,7 @@ impl<'a> Performance<'a> {
                     self.input_mode = InputMode::Normal;
                 }
             }
-            InputMode::Chord(ref mut chord_select, idx) => {
+            InputMode::Chord(chord_select, idx) => {
                 match chord_select.process_input(key) {
                     Ok((sel, close)) => {
                         if let Some(cs) = sel {
@@ -209,6 +209,7 @@ impl<'a> Performance<'a> {
                     KeyEvent {
                         modifiers: KeyModifiers::ALT,
                         code: KeyCode::Char(c),
+                        ..
                     } => {
                         if c.is_numeric() {
                             let idx = c.to_string().parse::<usize>()?;
@@ -353,7 +354,7 @@ pub fn render_mappings<'a>(key: &Key, mappings: &[Option<ChordSpec>], selected: 
         };
         Span::styled(name, style)
     }).collect();
-    lines.push(Spans::from(chord_id_spans));
+    lines.push(Line::from(chord_id_spans));
 
     // The spans for the chord
     let chord_name_spans: Vec<Span> = mappings.iter().map(|mcs| {
@@ -376,7 +377,7 @@ pub fn render_mappings<'a>(key: &Key, mappings: &[Option<ChordSpec>], selected: 
         let name = format!("{:^5}", name);
         Span::raw(name)
     }).collect();
-    lines.push(Spans::from(chord_name_spans));
+    lines.push(Line::from(chord_name_spans));
 
     for i in 0..required_lines {
         let chord_note_spans: Vec<Span> = chord_notes.iter().map(|notes| {
@@ -388,7 +389,7 @@ pub fn render_mappings<'a>(key: &Key, mappings: &[Option<ChordSpec>], selected: 
             let note = format!("{:^5}", note);
             Span::raw(note)
         }).collect();
-        lines.push(Spans::from(chord_note_spans));
+        lines.push(Line::from(chord_note_spans));
     }
 
     Paragraph::new(lines)

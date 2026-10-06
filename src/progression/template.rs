@@ -1,4 +1,4 @@
-use rand::{Rng, seq::SliceRandom};
+use rand::{RngExt, seq::IndexedRandom};
 use std::collections::HashMap;
 use serde::{Deserialize, Deserializer};
 use crate::core::{Mode, ChordSpec, Duration};
@@ -85,7 +85,7 @@ impl ProgressionTemplate {
 
     /// Generate a progression of chord specs starting with this chord spec.
     pub fn gen_progression_from_seed(&self, seed: &ChordSpec, mode: &Mode, bars: usize, resolution: &Duration) -> Progression  {
-        let mut rng = rand::thread_rng();
+        let mut rng = rand::rng();
         let timings = self.gen_timing(bars, resolution);
         let mut last = seed.clone();
         let template = match mode {
@@ -126,10 +126,10 @@ impl ProgressionTemplate {
     fn gen_timing(&self, bars: usize, resolution: &Duration) -> Vec<bool> {
         // Always start with a chord on the first beat
         let mut seq = vec![true];
-        let mut rng = rand::thread_rng();
+        let mut rng = rand::rng();
         let total = bars * resolution.ticks_per_bar();
         loop {
-            let pause = rng.gen_range(0..resolution.ticks_per_bar());
+            let pause = rng.random_range(0..resolution.ticks_per_bar());
             for _ in 0..pause {
                 seq.push(false);
             }
@@ -143,7 +143,7 @@ impl ProgressionTemplate {
 
     /// Randomly chooses a pattern given a mode.
     pub fn rand_pattern(&self, mode: &Mode) -> Vec<ChordSpec> {
-        let mut rng = rand::thread_rng();
+        let mut rng = rand::rng();
         let cands = match mode {
             Mode::Major => &self.major.patterns,
             Mode::Minor => &self.minor.patterns
@@ -153,7 +153,7 @@ impl ProgressionTemplate {
 
     /// Randomly chooses a chord given a mode.
     pub fn rand_chord_for_mode(&self, mode: &Mode) -> ChordSpec {
-        let mut rng = rand::thread_rng();
+        let mut rng = rand::rng();
         let cands = self.rand_pattern(mode);
         cands.choose(&mut rng).unwrap().clone()
     }
