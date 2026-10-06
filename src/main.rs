@@ -30,11 +30,15 @@ struct Args {
     #[arg(short, long, default_value = "/tmp/", value_hint = ValueHint::DirPath)]
     save_dir: String,
 
-    #[arg(long, default_value = "1")]
-    midi_in_port: usize,
+    /// Index of an existing MIDI input port to receive clock from.
+    /// By default a virtual input port is created instead.
+    #[arg(long)]
+    midi_in_port: Option<usize>,
 
-    #[arg(long, default_value = "1")]
-    midi_out_port: usize,
+    /// Index of an existing MIDI output port to send notes to.
+    /// By default a virtual output port is created instead.
+    #[arg(long)]
+    midi_out_port: Option<usize>,
 }
 
 fn main() -> Result<()> {

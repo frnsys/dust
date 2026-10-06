@@ -1,5 +1,5 @@
 use super::MIDIError;
-use midir::{MidiInput, MidiInputConnection};
+use midir::{MidiInput, MidiInputConnection, os::unix::VirtualInput};
 
 pub struct MIDIInput {
     pub name: Option<String>,
@@ -37,6 +37,17 @@ impl MIDIInput {
             self.name = Some(port_names[idx].to_string());
             Ok(())
         }
+    }
+
+    /// Create a virtual input port that other applications
+    /// (e.g. a DAW) can send MIDI to.
+    pub fn create_virtual<F>(&mut self, name: &str, callback: F) -> Result<(), MIDIError>
+        where F: FnMut(u64, &[u8], &mut ()) + Send + 'static {
+        let inp = self.input()?;
+        let conn_in = inp.create_virtual(name, callback, ())?;
+        self.conn = Some(conn_in);
+        self.name = Some(name.to_string());
+        Ok(())
     }
 
     pub fn close(&mut self) {

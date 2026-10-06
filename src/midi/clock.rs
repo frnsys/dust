@@ -25,11 +25,25 @@ impl MIDIClock {
         }
     }
 
-    pub fn connect_port<F>(&mut self, idx: usize, mut tick_fn: F) -> Result<(), MIDIError>
+    /// Connect to an existing input port by index.
+    pub fn connect_port<F>(&mut self, idx: usize, tick_fn: F) -> Result<(), MIDIError>
+        where F: FnMut(ClockEvent) + Send + 'static {
+        self.midi_in.connect_port(idx, Self::handler(tick_fn))
+    }
+
+    /// Create a virtual input port for receiving clock messages.
+    pub fn create_virtual<F>(&mut self, name: &str, tick_fn: F) -> Result<(), MIDIError>
+        where F: FnMut(ClockEvent) + Send + 'static {
+        self.midi_in.create_virtual(name, Self::handler(tick_fn))
+    }
+
+    /// Build the raw MIDI message handler that translates
+    /// clock/start/stop messages into `ClockEvent`s.
+    fn handler<F>(mut tick_fn: F) -> impl FnMut(u64, &[u8], &mut ()) + Send + 'static
         where F: FnMut(ClockEvent) + Send + 'static {
         let mut tick = 0;
         let mut playing = false;
-        self.midi_in.connect_port(idx, move |_, msg, _| {
+        move |_, msg, _| {
             let ev = match msg {
                 [248] => {
                     if playing {
@@ -55,7 +69,7 @@ impl MIDIClock {
             if let Some(ev) = ev {
                 tick_fn(ev);
             }
-        })
+        }
     }
 
     pub fn close(&mut self) {

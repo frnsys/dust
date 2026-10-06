@@ -82,10 +82,22 @@ impl<'a> Sequencer<'a> {
         }
     }
 
+    /// Receive clock from an existing MIDI input port.
     pub fn connect_port(&mut self, idx: usize) -> Result<(), MIDIError> {
+        let handler = self.clock_handler();
+        self.clock.connect_port(idx, handler)
+    }
+
+    /// Receive clock on a new virtual MIDI input port.
+    pub fn create_virtual_port(&mut self, name: &str) -> Result<(), MIDIError> {
+        let handler = self.clock_handler();
+        self.clock.create_virtual(name, handler)
+    }
+
+    fn clock_handler(&self) -> impl FnMut(ClockEvent) + Send + 'static {
         let state = self.state.clone();
         let midi = self.midi.clone();
-        self.clock.connect_port(idx, move |tick| {
+        move |tick| {
             let mut s = state.lock().unwrap();
             let emit_ticks = match s.resolution {
                 Duration::Quarter => 24,
@@ -109,7 +121,7 @@ impl<'a> Sequencer<'a> {
                 },
                 _ => {}
             }
-        })
+        }
     }
 
     pub fn selected_idx(&self) -> usize {

@@ -25,6 +25,11 @@ use ratatui::crossterm::event::{self, Event, KeyCode, KeyEventKind};
 
 const TICK_RATE: Duration = Duration::from_millis(100);
 
+/// Names of the virtual MIDI ports created by default.
+/// The DAW sends clock to the input and receives notes from the output.
+const VIRTUAL_OUT_PORT: &str = "Dust Output";
+const VIRTUAL_IN_PORT: &str = "Dust Clock";
+
 pub enum Mode {
     Sequencer,
     Performance,
@@ -39,11 +44,19 @@ pub struct App<'a> {
 }
 
 impl<'a> App<'a> {
-    pub fn new(template: ProgressionTemplate, midi_in_port: usize, midi_out_port: usize, save_dir: String) -> App<'a> {
-        let midi = MIDIOutput::from_port(midi_out_port).unwrap();
+    /// If a port index is `None`, a virtual port is created instead
+    /// of connecting to an existing one.
+    pub fn new(template: ProgressionTemplate, midi_in_port: Option<usize>, midi_out_port: Option<usize>, save_dir: String) -> App<'a> {
+        let midi = match midi_out_port {
+            Some(idx) => MIDIOutput::from_port(idx),
+            None => MIDIOutput::from_virtual(VIRTUAL_OUT_PORT),
+        }.unwrap();
         let midi = Arc::new(Mutex::new(midi));
         let mut seq = Sequencer::new(midi.clone(), template.clone(), save_dir.clone());
-        seq.connect_port(midi_in_port).unwrap();
+        match midi_in_port {
+            Some(idx) => seq.connect_port(idx),
+            None => seq.create_virtual_port(VIRTUAL_IN_PORT),
+        }.unwrap();
         App {
             midi: midi.clone(),
             select: None,

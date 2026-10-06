@@ -1,7 +1,7 @@
 use anyhow::Result;
 use super::MIDIError;
 use crate::core::Chord;
-use midir::{MidiOutput, MidiOutputConnection};
+use midir::{MidiOutput, MidiOutputConnection, os::unix::VirtualOutput};
 use std::{thread, sync::{Arc, Mutex}};
 use std::{thread::sleep, time::Duration};
 use std::collections::HashMap;
@@ -33,6 +33,22 @@ impl MIDIOutput {
         let mut m = MIDIOutput::new();
         m.connect_port(port)?;
         Ok(m)
+    }
+
+    /// Create a virtual output port that other applications
+    /// (e.g. a DAW) can connect to as a MIDI input.
+    pub fn from_virtual(name: &str) -> Result<MIDIOutput, MIDIError> {
+        let mut m = MIDIOutput::new();
+        m.create_virtual(name)?;
+        Ok(m)
+    }
+
+    pub fn create_virtual(&mut self, name: &str) -> Result<(), MIDIError> {
+        let out = self.output()?;
+        let conn_out = out.create_virtual(name)?;
+        let _ = self.conn.clone().lock().unwrap().insert(conn_out);
+        self.name = Some(name.to_string());
+        Ok(())
     }
 
     fn output(&self) -> Result<MidiOutput, MIDIError> {
